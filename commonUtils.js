@@ -1225,3 +1225,22 @@ function download(fileData, fileName = 'export.json') {
     a.click();
     delete a;
 }
+function exportCSV() {
+    const rows = [['icon', 'name', 'count']];
+
+    (data.data || []).forEach(channel => {
+        rows.push([channel.image || '', channel.name || '', channel.count ?? '']);
+    });
+
+    const csvData = rows.map(row => row.map(value => {
+        const text = String(value ?? '');
+        return '"' + text.replace(/"/g, '""') + '"';
+    }).join(',')).join('\\r\\n');
+
+    const file = new Blob([csvData], { type: 'text/csv;charset=utf-8;' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(file);
+    a.download = (COUNTER_THEME || 'export') + '.csv';
+    a.click();
+    URL.revokeObjectURL(a.href);
+}
