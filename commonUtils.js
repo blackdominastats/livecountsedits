@@ -1225,6 +1225,85 @@ function download(fileData, fileName = 'export.json') {
     a.click();
     delete a;
 }
+let csvTrackingEnabled = false;
+let csvTrackingInterval = null;
+let csvTrackingHistory = [];
+
+function getCSVTrackingSnapshot() {
+    const channels = (data.data || []).filter(channel => channel && channel.name);
+
+    return {
+        timestamp: new Date().toISOString(),
+        channels: channels.map(channel => ({
+            id: channel.id || channel.name,
+            name: String(channel.name),
+            image: channel.image || '',
+            count: channel.count ?? ''
+        }))
+    };
+}
+
+function updateCSVTrackingStatus() {
+    const status = document.getElementById('csvTrackingStatus');
+    if (!status) return;
+
+    status.textContent = csvTrackingHistory.length
+        ? `Recorded ${csvTrackingHistory.length} minute snapshot${csvTrackingHistory.length === 1 ? '' : 's'}.`
+        : 'No snapshots recorded yet.';
+}
+
+function recordCSVTrackingSnapshot(force = false) {
+    if (!csvTrackingEnabled && !force) return;
+
+    const snapshot = getCSVTrackingSnapshot();
+    if (!snapshot.channels.length) return;
+
+    csvTrackingHistory.push(snapshot);
+    updateCSVTrackingStatus();
+}
+
+function toggleCSVTracking(enabled) {
+    csvTrackingEnabled = !!enabled;
+
+    if (csvTrackingInterval) {
+        clearInterval(csvTrackingInterval);
+        csvTrackingInterval = null;
+    }
+
+    if (csvTrackingEnabled) {
+        // Capture the current Top 50 immediately, then once every minute.
+        recordCSVTrackingSnapshot(true);
+        csvTrackingInterval = setInterval(() => {
+            recordCSVTrackingSnapshot();
+        }, 60000);
+    }
+
+    updateCSVTrackingStatus();
+}
+
+function getCSVExportHistory() {
+    if (csvTrackingHistory.length) {
+        return csvTrackingHistory;
+    }
+
+    return [getCSVTrackingSnapshot()];
+}
+
+function csvEscape(value) {
+    const text = String(value ?? '');
+    return '"' + text.replace(/"/g, '""') + '"';
+}
+
+function downloadCSVRows(rows, fileName) {
+    const csvData = rows.map(row => row.map(csvEscape).join(',')).join('\r\n');
+    const file = new Blob([csvData], { type: 'text/csv;charset=utf-8;' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(file);
+    a.download = fileName;
+    a.click();
+    URL.revokeObjectURL(a.href);
+}
+
 function exportCSV() {
     const rows = [['icon', 'name', 'count']];
 
@@ -1232,63 +1311,83 @@ function exportCSV() {
         rows.push([channel.image || '', channel.name || '', channel.count ?? '']);
     });
 
-    const csvData = rows.map(row => row.map(value => {
-        const text = String(value ?? '');
-        return '"' + text.replace(/"/g, '""') + '"';
-    }).join(',')).join('\\r\\n');
-
-    const file = new Blob([csvData], { type: 'text/csv;charset=utf-8;' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(file);
-    a.download = (COUNTER_THEME || 'export') + '.csv';
-    a.click();
-    URL.revokeObjectURL(a.href);
+    downloadCSVRows(rows, (COUNTER_THEME || 'export') + '.csv');
 }
 
-
 function exportCSVAlienArt() {
-    const channels = (data.data || []).filter(channel => channel && channel.name != null);
+    const history = getCSVExportHistory();
+    const items = [];
+    const itemMap = new Map();
+
+    history.forEach(snapshot => {
+        snapshot.channels.forEach(channel => {
+            const key = String(channel.id || channel.name);
+            if (!itemMap.has(key)) {
+                itemMap.set(key, items.length);
+                items.push({
+                    id: key,
+                    name: channel.name,
+                    image: channel.image
+                });
+            }
+        });
+    });
+
     const rows = [
-        [''].concat(channels.map(channel => channel.name || '')),
-        ['image'].concat(channels.map(channel => channel.image || '')),
-        [new Date().toISOString()].concat(channels.map(channel => channel.count ?? ''))
+        [''].concat(items.map(item => item.name)),
+        ['image'].concat(items.map(item => item.image || ''))
     ];
 
-    const csvData = rows.map(row => row.map(value => {
-        const text = String(value ?? '');
-        return '"' + text.replace(/"/g, '""') + '"';
-    }).join(',')).join('\r\n');
+    history.forEach(snapshot => {
+        const values = new Map(snapshot.channels.map(channel => [
+            String(channel.id || channel.name),
+            channel.count
+        ]));
 
-    const file = new Blob([csvData], { type: 'text/csv;charset=utf-8;' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(file);
-    a.download = (COUNTER_THEME || 'export') + '-alienart.csv';
-    a.click();
-    URL.revokeObjectURL(a.href);
+        rows.push([
+            snapshot.timestamp,
+            ...items.map(item => values.has(item.id) ? values.get(item.id) : '')
+        ]);
+    });
+
+    downloadCSVRows(rows, (COUNTER_THEME || 'export') + '-alienart.csv');
 }
 
 function exportCSVFlourish() {
-    const channels = (data.data || []).filter(channel => channel && channel.name != null);
-    const stage = new Date().toISOString();
+    const history = getCSVExportHistory();
+    const items = [];
+    const itemMap = new Map();
+
+    history.forEach(snapshot => {
+        snapshot.channels.forEach(channel => {
+            const key = String(channel.id || channel.name);
+            if (!itemMap.has(key)) {
+                itemMap.set(key, items.length);
+                items.push({
+                    id: key,
+                    name: channel.name,
+                    image: channel.image
+                });
+            }
+        });
+    });
 
     const rows = [
-        ['Name', 'Image', stage],
-        ...channels.map(channel => [
-            channel.name || '',
-            channel.image || '',
-            channel.count ?? ''
-        ])
+        ['Name', 'Image', ...history.map(snapshot => snapshot.timestamp)]
     ];
 
-    const csvData = rows.map(row => row.map(value => {
-        const text = String(value ?? '');
-        return '"' + text.replace(/"/g, '""') + '"';
-    }).join(',')).join('\r\n');
+    items.forEach(item => {
+        const values = history.map(snapshot => {
+            const channel = snapshot.channels.find(x =>
+                String(x.id || x.name) === item.id
+            );
+            return channel ? channel.count : '';
+        });
 
-    const file = new Blob([csvData], { type: 'text/csv;charset=utf-8;' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(file);
-    a.download = (COUNTER_THEME || 'export') + '-flourish.csv';
-    a.click();
-    URL.revokeObjectURL(a.href);
+        rows.push([item.name, item.image || '', ...values]);
+    });
+
+    downloadCSVRows(rows, (COUNTER_THEME || 'export') + '-flourish.csv');
 }
+
+updateCSVTrackingStatus();
