@@ -1271,8 +1271,8 @@ function toggleCSVTracking(enabled) {
     }
 
     if (csvTrackingEnabled) {
-        // Capture the current Top 50 immediately, then once every minute.
-        recordCSVTrackingSnapshot(true);
+        // The first snapshot is taken after a full minute. Enabling the
+        // checkbox must not create a snapshot for time that has not elapsed.
         csvTrackingInterval = setInterval(() => {
             recordCSVTrackingSnapshot();
         }, 60000);
@@ -1280,6 +1280,26 @@ function toggleCSVTracking(enabled) {
 
     updateCSVTrackingStatus();
 }
+
+function resetCSVTrackingState() {
+    // Browsers can restore form controls/page state across refresh or bfcache
+    // restores. CSV tracking history is intentionally session-only, so make
+    // sure a restored page cannot expose stale snapshots.
+    if (csvTrackingInterval) {
+        clearInterval(csvTrackingInterval);
+        csvTrackingInterval = null;
+    }
+
+    csvTrackingEnabled = false;
+    csvTrackingHistory = [];
+
+    const checkbox = document.getElementById('csvTrackMinutely');
+    if (checkbox) checkbox.checked = false;
+
+    updateCSVTrackingStatus();
+}
+
+window.addEventListener('pageshow', resetCSVTrackingState);
 
 function getCSVExportHistory() {
     if (csvTrackingHistory.length) {
