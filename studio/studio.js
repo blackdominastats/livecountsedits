@@ -333,11 +333,11 @@ document.getElementById('close').onclick = function () {
 
 function getStudioThemeColors() {
     const base = {
-        headerColor: '#1f1f1f',
-        bgColor: '#282828',
-        textColor: '#ffffff',
-        footerColor: '#aaaaaa',
-        nameColor: '#ffffff',
+        headerColor: data.ytStudioSettings?.headerColor || '#1f1f1f',
+        bgColor: data.bgColor || '#282828',
+        textColor: data.textColor || '#ffffff',
+        footerColor: data.footerColor || '#aaaaaa',
+        nameColor: data.nameColor || '#ffffff',
         accentColor: '#41b4d9'
     };
 
