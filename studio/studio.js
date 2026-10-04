@@ -41,6 +41,16 @@ window.onload = async () => {
             dropdownBottomText: 'Live Data',
             headerColor: '#1f1f1f',
             countEditBox: false,
+            customTheme: {
+                enabled: false,
+                preset: 'default',
+                headerColor: '#1f1f1f',
+                bgColor: '#282828',
+                textColor: '#ffffff',
+                footerColor: '#aaaaaa',
+                nameColor: '#ffffff',
+                accentColor: '#41b4d9'
+            },
         },
         partialExports: {
             ytStudioSettings: true,
@@ -253,13 +263,79 @@ document.getElementById('close').onclick = function () {
     document.getElementById('settingsMenu').style.visibility = "hidden"
 }
 
+function getStudioThemeColors() {
+    const base = {
+        headerColor: '#1f1f1f',
+        bgColor: '#282828',
+        textColor: '#ffffff',
+        footerColor: '#aaaaaa',
+        nameColor: '#ffffff',
+        accentColor: '#41b4d9'
+    };
+
+    if (!data.ytStudioSettings?.customTheme?.enabled) return base;
+
+    const theme = data.ytStudioSettings.customTheme;
+    const presets = {
+        light: {
+            headerColor: '#f2f2f2',
+            bgColor: '#ffffff',
+            textColor: '#0f0f0f',
+            footerColor: '#606060',
+            nameColor: '#0f0f0f',
+            accentColor: '#065fd4'
+        },
+        midnight: {
+            headerColor: '#111827',
+            bgColor: '#0b1120',
+            textColor: '#f8fafc',
+            footerColor: '#94a3b8',
+            nameColor: '#f8fafc',
+            accentColor: '#38bdf8'
+        },
+        red: {
+            headerColor: '#2b1111',
+            bgColor: '#160707',
+            textColor: '#fff5f5',
+            footerColor: '#e5b8b8',
+            nameColor: '#fff5f5',
+            accentColor: '#ff4d4d'
+        },
+        purple: {
+            headerColor: '#20152e',
+            bgColor: '#120b1a',
+            textColor: '#faf5ff',
+            footerColor: '#c4b5d4',
+            nameColor: '#faf5ff',
+            accentColor: '#a855f7'
+        }
+    };
+
+    if (presets[theme.preset]) return presets[theme.preset];
+
+    if (theme.preset === 'custom') {
+        return {
+            headerColor: theme.headerColor || base.headerColor,
+            bgColor: theme.bgColor || base.bgColor,
+            textColor: theme.textColor || base.textColor,
+            footerColor: theme.footerColor || base.footerColor,
+            nameColor: theme.nameColor || base.nameColor,
+            accentColor: theme.accentColor || base.accentColor
+        };
+    }
+
+    return base;
+}
+
 function fix(noOdo = false) {
     document.getElementById('name').innerText = data.data[0].name || 'User';
     if ((data.data[0].image || '/default.png') !== document.getElementById('image').src) {
         document.getElementById('image').src = data.data[0].image || '/default.png';
     }
 
-    document.getElementById('image').style.border = '8px solid ' + data.bgColor;
+    const studioTheme = getStudioThemeColors();
+
+    document.getElementById('image').style.border = '8px solid ' + studioTheme.bgColor;
     if (!data.saveChartData) {
         data.liveGraph = [];
     }
@@ -282,21 +358,21 @@ function fix(noOdo = false) {
 
     chart.series[0].name = data.footerText;
 
-    document.querySelector('.header').style.backgroundColor = data.ytStudioSettings.headerColor;
-    document.querySelector('.main').style.backgroundColor = data.bgColor;
-    document.getElementById('count').style.color = data.textColor;
+    document.querySelector('.header').style.backgroundColor = studioTheme.headerColor;
+    document.querySelector('.main').style.backgroundColor = studioTheme.bgColor;
+    document.getElementById('count').style.color = studioTheme.textColor;
     document.getElementById('count').style.fontWeight = data.counterFontWeight;
     document.getElementById('count').style.fontFamily = data.mainFont;
     document.getElementById('count').style.marginTop = data.ytStudioSettings.countMarginTop + 'px';
     document.getElementById('footer').innerText = data.footerText;
-    document.getElementById('footer').style.color = data.footerColor;
+    document.getElementById('footer').style.color = studioTheme.footerColor;
 
     document.getElementById('counterColor').innerText = `
         #count {
-            color: ${data.textColor};
+            color: ${studioTheme.textColor};
         }
     `
-    document.getElementById('name').style.color = data.nameColor;
+    document.getElementById('name').style.color = studioTheme.nameColor;
     document.body.style.fontFamily = data.mainFont;
     document.querySelector('.live').style.fontFamily = data.mainFont;
     document.getElementById('dropdown-label1').style.fontFamily = data.mainFont;
@@ -304,11 +380,11 @@ function fix(noOdo = false) {
     document.getElementById('name').style.fontFamily = data.mainFont;
     document.getElementById('footer').style.fontFamily = data.mainFont;
     document.querySelector('.chart-labels-area1').style.fontFamily = data.mainFont;
-    document.querySelector('.chart-labels-area1').style.color = data.textColor;
+    document.querySelector('.chart-labels-area1').style.color = studioTheme.textColor;
     document.querySelector('.chart-labels-area2').style.fontFamily = data.mainFont;
-    document.querySelector('.chart-labels-area2').style.color = data.footerColor;
+    document.querySelector('.chart-labels-area2').style.color = studioTheme.footerColor;
     for (i = 1; i <= 5; i++) {
-        document.querySelector('.svg' + i).style.fill = data.footerColor;
+        document.querySelector('.svg' + i).style.fill = studioTheme.footerColor;
     }
 
     document.getElementById('dropdown-label1').innerText = data.ytStudioSettings.dropdownTopText;
@@ -317,6 +393,8 @@ function fix(noOdo = false) {
     document.getElementById('dropdown-label2').style.color = data.textColor;
 
     document.getElementById('manual-input').style.display = data.ytStudioSettings.countEditBox ? 'block' : 'none';
+
+    document.getElementById('dot').style.backgroundColor = studioTheme.accentColor;
 
     const color = getComputedStyle(document.querySelector('.header')).getPropertyValue('background-color').replace('rgb(', '').split(',').map(x => parseInt(x, 10));
     const brightness = (0.2126 * color[0] + 0.7152 * color[1] + 0.0722 * color[2]) / 255;
@@ -362,9 +440,9 @@ function fix(noOdo = false) {
             }
         });
         chart.series[0].update({
-            color: data.cardStyles.chartLineColor,
+            color: data.ytStudioSettings?.customTheme?.enabled ? studioTheme.accentColor : data.cardStyles.chartLineColor,
             name: data.footerText,
-            lineColor: data.cardStyles.chartLineColor
+            lineColor: data.ytStudioSettings?.customTheme?.enabled ? studioTheme.accentColor : data.cardStyles.chartLineColor
         });
     } catch (err) {
         console.error(err);
@@ -438,8 +516,8 @@ function renderChart() {
                 showInLegend: false,
                 name: data.footerText,
                 marker: { enabled: false},
-                color: data.cardStyles.chartLineColor,
-                lineColor: data.cardStyles.chartLineColor,
+                color: data.ytStudioSettings?.customTheme?.enabled ? getStudioThemeColors().accentColor : data.cardStyles.chartLineColor,
+                lineColor: data.ytStudioSettings?.customTheme?.enabled ? getStudioThemeColors().accentColor : data.cardStyles.chartLineColor,
                 lineWidth: 2,
                 data: data.useStaticGraph ? serializeStaticChartData() : (data.saveChartData ? (data.liveGraph || []) : [])
             }
