@@ -1244,3 +1244,51 @@ function exportCSV() {
     a.click();
     URL.revokeObjectURL(a.href);
 }
+
+
+function exportCSVAlienArt() {
+    const channels = (data.data || []).filter(channel => channel && channel.name != null);
+    const rows = [
+        [''].concat(channels.map(channel => channel.name || '')),
+        ['image'].concat(channels.map(channel => channel.image || '')),
+        [new Date().toISOString()].concat(channels.map(channel => channel.count ?? ''))
+    ];
+
+    const csvData = rows.map(row => row.map(value => {
+        const text = String(value ?? '');
+        return '"' + text.replace(/"/g, '""') + '"';
+    }).join(',')).join('\r\n');
+
+    const file = new Blob([csvData], { type: 'text/csv;charset=utf-8;' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(file);
+    a.download = (COUNTER_THEME || 'export') + '-alienart.csv';
+    a.click();
+    URL.revokeObjectURL(a.href);
+}
+
+function exportCSVFlourish() {
+    const channels = (data.data || []).filter(channel => channel && channel.name != null);
+    const stage = new Date().toISOString();
+
+    const rows = [
+        ['Name', 'Image', stage],
+        ...channels.map(channel => [
+            channel.name || '',
+            channel.image || '',
+            channel.count ?? ''
+        ])
+    ];
+
+    const csvData = rows.map(row => row.map(value => {
+        const text = String(value ?? '');
+        return '"' + text.replace(/"/g, '""') + '"';
+    }).join(',')).join('\r\n');
+
+    const file = new Blob([csvData], { type: 'text/csv;charset=utf-8;' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(file);
+    a.download = (COUNTER_THEME || 'export') + '-flourish.csv';
+    a.click();
+    URL.revokeObjectURL(a.href);
+}
