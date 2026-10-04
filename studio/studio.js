@@ -90,6 +90,74 @@ window.onload = async () => {
                 type: 'checkbox',
                 value: false,
                 path: 'data.ytStudioSettings.countEditBox'
+            },
+            {
+                type: 'html',
+                value: '<hr><h3>Optional Custom Theme</h3><p>Leave this disabled to keep the normal YouTube Studio look.</p>'
+            },
+            {
+                title: 'Enable custom theme',
+                type: 'checkbox',
+                value: false,
+                path: 'data.ytStudioSettings.customTheme.enabled',
+                func: function () { fix(); }
+            },
+            {
+                title: 'Theme preset',
+                type: 'select',
+                value: 'default',
+                path: 'data.ytStudioSettings.customTheme.preset',
+                options: [
+                    ['default', 'Studio default'],
+                    ['light', 'Light'],
+                    ['midnight', 'Midnight'],
+                    ['red', 'Red'],
+                    ['purple', 'Purple'],
+                    ['custom', 'Custom colors']
+                ],
+                func: function () { fix(); }
+            },
+            {
+                title: 'Custom header color',
+                type: 'color',
+                path: 'data.ytStudioSettings.customTheme.headerColor',
+                id: 'studioCustomHeaderColor',
+                func: function () { fix(); }
+            },
+            {
+                title: 'Custom background color',
+                type: 'color',
+                path: 'data.ytStudioSettings.customTheme.bgColor',
+                id: 'studioCustomBgColor',
+                func: function () { fix(); }
+            },
+            {
+                title: 'Custom counter/text color',
+                type: 'color',
+                path: 'data.ytStudioSettings.customTheme.textColor',
+                id: 'studioCustomTextColor',
+                func: function () { fix(); }
+            },
+            {
+                title: 'Custom secondary text color',
+                type: 'color',
+                path: 'data.ytStudioSettings.customTheme.footerColor',
+                id: 'studioCustomFooterColor',
+                func: function () { fix(); }
+            },
+            {
+                title: 'Custom channel name color',
+                type: 'color',
+                path: 'data.ytStudioSettings.customTheme.nameColor',
+                id: 'studioCustomNameColor',
+                func: function () { fix(); }
+            },
+            {
+                title: 'Custom live/accent color',
+                type: 'color',
+                path: 'data.ytStudioSettings.customTheme.accentColor',
+                id: 'studioCustomAccentColor',
+                func: function () { fix(); }
             }
         ]
     }
