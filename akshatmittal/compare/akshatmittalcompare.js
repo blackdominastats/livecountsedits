@@ -1,31 +1,16 @@
 window.onload = async () => {
     COUNTER_THEME = 'akshatmittalcompare';
     example_data.saveType = COUNTER_THEME;
-
     enableBannerFeature();
     enableCompareMode();
 
     const extraKeys = {
-        boxColor: '#ffffff',
-        bgColor: '#eef5f9',
-        nameColor: '#605a64',
-        mainFont: 'Roboto, sans-serif',
-        textColor: '#605a64',
-        footerColor: '#67757c',
-        counterFontWeight: '300',
-        odometerSpeed: 0.5,
+        boxColor: '#ffffff', bgColor: '#eef5f9', nameColor: '#605a64', mainFont: 'Roboto, sans-serif',
+        textColor: '#605a64', footerColor: '#67757c', counterFontWeight: '300', odometerSpeed: 0.5,
         gapMethod: 'absolute',
-        akshatmittalSettings: {
-            countEditBox: false,
-            showSocialMedia: true,
-            showSubscribeAndChangeButtons: true,
-            showTrophy: true,
-        },
-        partialExports: {
-            akshatmittalSettings: true,
-        }
-    }
-
+        akshatmittalSettings: { countEditBox: false, showSocialMedia: true, showSubscribeAndChangeButtons: true, showTrophy: true },
+        partialExports: { akshatmittalSettings: true }
+    };
     example_data = mergeWithExampleData(extraKeys, example_data);
 
     const insertedTab = {
@@ -37,18 +22,12 @@ window.onload = async () => {
             { title: 'Show "Subscribe" and "Change" buttons', value: true, type: 'checkbox', path: 'data.akshatmittalSettings.showSubscribeAndChangeButtons' },
             { title: 'Show trophy icon for leading channel', value: true, type: 'checkbox', path: 'data.akshatmittalSettings.showTrophy' }
         ]
-    }
-
-    const partialExportAddition = {
-        title: 'Akshatmittal settings', value: true, type: 'checkbox',
-        path: 'data.partialExports.akshatmittalSettings', className: 'partial-export-option'
-    }
-
+    };
+    const partialExportAddition = { title: 'Akshatmittal settings', value: true, type: 'checkbox', path: 'data.partialExports.akshatmittalSettings', className: 'partial-export-option' };
     const styleAdditions = [
         { title: 'Card background color', type: 'color', path: 'data.boxColor' },
         { title: 'Footer color', type: 'color', path: 'data.footerColor' }
     ];
-
     MENU.tabs.splice(-2, 0, insertedTab);
     MENU.tabs.find(x => x.title === 'Import & Export Data').items.splice(-3, 0, partialExportAddition);
     MENU.tabs.find(x => x.title === 'Design Settings & Styling').items.splice(6, 0, ...styleAdditions);
@@ -56,10 +35,7 @@ window.onload = async () => {
     try {
         data = await retrieveDataFromBrowser(COUNTER_THEME, 1);
         data = mergeWithExampleData(data, example_data);
-    } catch (err) {
-        console.error(err);
-    }
-
+    } catch (err) { console.error(err); }
     fixData(2);
 
     const oldAPIUpdates = localStorage.getItem('akshatmittal-compare-apiUpdates');
@@ -69,53 +45,40 @@ window.onload = async () => {
             const oldSave = {
                 apiUpdates: jsonData,
                 data: [new Channel({ id: (jsonData.updateSide === '1' ? jsonData.channelID : '') || uuidGen() }), new Channel({ id: (jsonData.updateSide === '2' ? jsonData.channelID : '') || uuidGen() })],
-                partialExports: { counters: true, apiUpdates: true },
-                saveType: COUNTER_THEME
-            }
+                partialExports: { counters: true, apiUpdates: true }, saveType: COUNTER_THEME
+            };
             delete oldSave.apiUpdates.channelID;
             if (confirm('You have old API update settings saved for the Akshatmittal compare counter. Would you like to save a backup just in case?')) {
                 const file = new Blob([JSON.stringify(oldSave)], { type: 'text/plain' });
-                const a = document.createElement('a');
-                a.href = URL.createObjectURL(file);
-                a.download = 'akshatmittalcompare-legacy-api-updates.json';
-                a.click();
-                delete a;
+                const a = document.createElement('a'); a.href = URL.createObjectURL(file); a.download = 'akshatmittalcompare-legacy-api-updates.json'; a.click(); delete a;
             }
             delete oldSave.partialExports;
             data = mergeWithExampleData(oldSave, data);
-        } catch (err) {
-            console.error(err);
-        }
+        } catch (err) { console.error(err); }
         localStorage.removeItem('akshatmittal-compare-apiUpdates');
     }
     drawMenu(MENU, document.querySelector('.tabs'), document.querySelector('.tab-stuff'), document.querySelector('.tab-controls'));
     afterDrawingMenu();
     await processImport(data);
-}
+};
 
 async function processImport(imported) {
     importingStuff(imported, 2);
     fix();
     updateGainTypes(2);
     displayTrophy(data.data[0].getDisplayedCount(), data.data[1].getDisplayedCount());
+    initRaceAnalytics();
     return imported;
 }
 
 function afterDrawingMenu2() {
-    updateGainTypes(2);
-    fillMenus();
-    saveAPISettings(false);
-    refreshCount();
-
+    updateGainTypes(2); fillMenus(); saveAPISettings(false); refreshCount();
     document.getElementById('saveCountButtonLeft').addEventListener('click', () => {
-        const count = parseFloat(document.getElementById('left-input-count').value);
-        if (isFinite(count)) data.data[0].count = count;
-    })
-
+        const count = parseFloat(document.getElementById('left-input-count').value); if (isFinite(count)) data.data[0].count = count;
+    });
     document.getElementById('saveCountButtonRight').addEventListener('click', () => {
-        const count = parseFloat(document.getElementById('right-input-count').value);
-        if (isFinite(count)) data.data[1].count = count;
-    })
+        const count = parseFloat(document.getElementById('right-input-count').value); if (isFinite(count)) data.data[1].count = count;
+    });
 }
 
 function updateCounters2(doGains = true) {
@@ -123,36 +86,24 @@ function updateCounters2(doGains = true) {
     const count2 = data.data[1].getDisplayedCount();
     document.getElementById('yt_subs_vs1').innerText = count1;
     document.getElementById('yt_subs_vs2').innerText = count2;
-
-    // The compare difference is always absolute: it can never display a negative number.
     const gap = Math.abs(count1 - count2);
     document.getElementById('yt_diff').innerText = gap;
-
     const leaderCount = Math.max(count1, count2);
     const leadPercent = leaderCount > 0 ? ((gap / leaderCount) * 100).toFixed(2) : '0.00';
-    const status = count1 === count2
-        ? 'Tied'
-        : `Leader: ${count1 > count2 ? (data.data[0].name || 'Left') : (data.data[1].name || 'Right')}`;
-
+    const status = count1 === count2 ? 'Tied' : `Leader: ${count1 > count2 ? (data.data[0].name || 'Left') : (data.data[1].name || 'Right')}`;
     const statusElement = document.getElementById('yt_race_status');
     const percentElement = document.getElementById('yt_lead_percent');
     if (statusElement) statusElement.innerText = status;
     if (percentElement) percentElement.innerText = `Lead: ${leadPercent}%`;
-
+    recordRaceHistory(count1, count2);
+    updateRaceStats();
     displayTrophy(count1, count2);
 }
 
 function displayTrophy(c1, c2) {
-    if (c1 > c2) {
-        document.querySelector('.vs-leader.w-left').style.display = 'block';
-        document.querySelector('.vs-leader.w-right').style.display = 'none';
-    } else if (c1 < c2) {
-        document.querySelector('.vs-leader.w-left').style.display = 'none';
-        document.querySelector('.vs-leader.w-right').style.display = 'block';
-    } else {
-        document.querySelector('.vs-leader.w-left').style.display = 'none';
-        document.querySelector('.vs-leader.w-right').style.display = 'none';
-    }
+    if (c1 > c2) { document.querySelector('.vs-leader.w-left').style.display = 'block'; document.querySelector('.vs-leader.w-right').style.display = 'none'; }
+    else if (c1 < c2) { document.querySelector('.vs-leader.w-left').style.display = 'none'; document.querySelector('.vs-leader.w-right').style.display = 'block'; }
+    else { document.querySelector('.vs-leader.w-left').style.display = 'none'; document.querySelector('.vs-leader.w-right').style.display = 'none'; }
 }
 
 function fix(noOdo = false) {
@@ -165,30 +116,21 @@ function fix(noOdo = false) {
     document.getElementById('yt_diff_name').style.color = data.footerColor;
     document.querySelector('.display-title').style.color = data.footerColor;
     document.querySelectorAll('.main-card .font-light').forEach(x => x.style.color = data.textColor);
-
     if ((data.data[0].image || '/default.png') !== document.getElementById('yt_profile_vs1').src) document.getElementById('yt_profile_vs1').src = data.data[0].image || '/default.png';
     if ((data.data[0].banner || '/default_banner.png') !== document.getElementById('yt_cover_vs1').src) document.getElementById('yt_cover_vs1').src = data.data[0].banner || '/default_banner.png';
     if ((data.data[1].image || '/default.png') !== document.getElementById('yt_profile_vs2').src) document.getElementById('yt_profile_vs2').src = data.data[1].image || '/default.png';
     if ((data.data[1].banner || '/default_banner.png') !== document.getElementById('yt_cover_vs2').src) document.getElementById('yt_cover_vs2').src = data.data[1].banner || '/default_banner.png';
-
     document.querySelector('.page-wrapper').style.backgroundColor = data.bgColor;
     document.querySelectorAll('.main-card').forEach(x => x.style.backgroundColor = data.boxColor);
     document.querySelectorAll('.odometer').forEach(x => { x.style.fontFamily = data.mainFont; x.style.fontWeight = data.counterFontWeight; });
-
     document.getElementById('counterColor').innerText = `#yt_subs_vs1, #yt_subs_vs2 { color: ${data.textColor}; } #yt_diff { color: ${data.textColor} !important; }`;
-
     document.querySelectorAll('.selcl').forEach(x => { x.style.display = data.akshatmittalSettings.showSocialMedia ? '' : 'none'; });
     document.querySelectorAll('.sub-and-change').forEach(x => {
-        if (data.akshatmittalSettings.showSubscribeAndChangeButtons) {
-            x.style.display = ''; document.querySelector('.main-row').style.marginBottom = '';
-        } else {
-            x.style.display = 'none'; document.querySelector('.main-row').style.marginBottom = '20px';
-        }
+        if (data.akshatmittalSettings.showSubscribeAndChangeButtons) { x.style.display = ''; document.querySelector('.main-row').style.marginBottom = ''; }
+        else { x.style.display = 'none'; document.querySelector('.main-row').style.marginBottom = '20px'; }
     });
     document.querySelectorAll('.manual-input').forEach(x => { x.style.display = data.akshatmittalSettings.countEditBox ? 'block' : 'none'; });
-
     document.getElementById('noTrophy').innerText = data.akshatmittalSettings.showTrophy ? '' : '.vs-leader { display: none !important; }';
-
     const cardColor = getComputedStyle(document.querySelector('.selcl')).backgroundColor.replace('rgb(','').replace(')','').split(', ');
     const colorDistanceSquared = (cardColor[0] - 153) ** 2 + (cardColor[1] - 171) ** 2 + (cardColor[2] - 180) ** 2;
     document.getElementById('shareOnTwitterColor').innerText = colorDistanceSquared < 2000 ? '.text-muted { color: white !important; }' : '';
@@ -201,11 +143,80 @@ async function unoReverse() {
     await saveDataInBrowser(COUNTER_THEME, data);
     window.location.reload();
 }
+function subLeft() { if (data.akshatmittalSettings.subscribeButton) data.data[0].count++; }
+function subRight() { if (data.akshatmittalSettings.subscribeButton) data.data[1].count++; }
 
-function subLeft() {
-    if (data.akshatmittalSettings.subscribeButton) data.data[0].count++;
+const RACE_HISTORY_KEY = 'akshatmittalcompare-race-history';
+const RACE_HISTORY_LIMIT = 500;
+let raceHistory = [];
+let lastRaceSample = 0;
+let raceReplayTimer = null;
+
+function initRaceAnalytics() {
+    try { raceHistory = JSON.parse(localStorage.getItem(RACE_HISTORY_KEY) || '[]'); if (!Array.isArray(raceHistory)) raceHistory = []; } catch (_) { raceHistory = []; }
+    const menu = document.querySelector('.menu');
+    if (!document.getElementById('raceAnalyticsPanel') && menu) {
+        menu.insertAdjacentHTML('beforebegin', `<div id="raceAnalyticsPanel" class="container" style="margin-top:20px;margin-bottom:20px;"><div class="card main-card"><div class="card-block"><h3 style="margin-top:0;">Race History &amp; Growth Statistics</h3><div id="raceStats" style="line-height:1.8;">Collecting race data...</div><hr><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;"><button class="btn btn-info" id="raceReplayBtn">Replay Race</button><button class="btn btn-danger" id="raceClearBtn">Clear History</button><input id="raceReplaySlider" type="range" min="0" max="0" value="0" style="flex:1;min-width:180px;"></div><div id="raceReplayDisplay" style="text-align:center;margin-top:14px;font-size:1.05rem;">No history yet.</div></div></div></div>`);
+        document.getElementById('raceReplaySlider').addEventListener('input', e => showRaceReplay(Number(e.target.value)));
+        document.getElementById('raceReplayBtn').addEventListener('click', toggleRaceReplay);
+        document.getElementById('raceClearBtn').addEventListener('click', clearRaceHistory);
+    }
+    updateRaceStats(); updateReplayControls();
 }
 
-function subRight() {
-    if (data.akshatmittalSettings.subscribeButton) data.data[1].count++;
+function recordRaceHistory(count1, count2) {
+    const now = Date.now();
+    if (lastRaceSample && now - lastRaceSample < 30000) return;
+    lastRaceSample = now;
+    const previous = raceHistory[raceHistory.length - 1];
+    if (previous && previous.left === count1 && previous.right === count2) return;
+    raceHistory.push({ time: now, left: count1, right: count2 });
+    if (raceHistory.length > RACE_HISTORY_LIMIT) raceHistory = raceHistory.slice(-RACE_HISTORY_LIMIT);
+    try { localStorage.setItem(RACE_HISTORY_KEY, JSON.stringify(raceHistory)); } catch (_) {}
+    updateReplayControls();
 }
+
+function ratePerMinute(start, end, key) {
+    const minutes = (end.time - start.time) / 60000;
+    return minutes > 0 ? (end[key] - start[key]) / minutes : 0;
+}
+function formatRate(rate) { return `${rate >= 0 ? '+' : ''}${rate.toFixed(1)}/min`; }
+
+function updateRaceStats() {
+    const el = document.getElementById('raceStats');
+    if (!el || !raceHistory.length) return;
+    const first = raceHistory[0], last = raceHistory[raceHistory.length - 1];
+    const leftRate = ratePerMinute(first, last, 'left'), rightRate = ratePerMinute(first, last, 'right');
+    const recent = raceHistory.length > 1 ? raceHistory[raceHistory.length - 2] : first;
+    const recentLeft = ratePerMinute(recent, last, 'left'), recentRight = ratePerMinute(recent, last, 'right');
+    const gap = Math.abs(last.left - last.right);
+    const leader = last.left === last.right ? null : (last.left > last.right ? 'left' : 'right');
+    const trailing = leader === 'left' ? 'right' : 'left';
+    const relativeRate = trailing === 'left' ? leftRate - rightRate : rightRate - leftRate;
+    const projection = relativeRate > 0 && gap > 0 ? `${(gap / relativeRate).toFixed(1)} min` : 'Not projected';
+    el.innerHTML = `<div><strong>Average growth:</strong> ${formatRate(leftRate)} vs ${formatRate(rightRate)}</div><div><strong>Recent growth:</strong> ${formatRate(recentLeft)} vs ${formatRate(recentRight)}</div><div><strong>Current gap:</strong> ${Math.round(gap).toLocaleString()}</div><div><strong>Time to overtake:</strong> ${leader ? projection : 'Tied'}</div><div style="opacity:.7;font-size:.9rem;">Tracking ${raceHistory.length} samples over ${((last.time - first.time) / 60000).toFixed(1)} minutes.</div>`;
+}
+function updateReplayControls() {
+    const slider = document.getElementById('raceReplaySlider'); if (!slider) return;
+    slider.max = Math.max(0, raceHistory.length - 1); slider.value = Math.min(Number(slider.value), Number(slider.max));
+}
+function showRaceReplay(index) {
+    const display = document.getElementById('raceReplayDisplay'); if (!display || !raceHistory.length) return;
+    const item = raceHistory[Math.max(0, Math.min(index, raceHistory.length - 1))];
+    const gap = Math.abs(item.left - item.right);
+    display.innerHTML = `<strong>${new Date(item.time).toLocaleString()}</strong><br>${escapeRaceText(data.data[0].name || 'Left')}: ${Math.round(item.left).toLocaleString()} &nbsp; vs &nbsp; ${escapeRaceText(data.data[1].name || 'Right')}: ${Math.round(item.right).toLocaleString()}<br>Difference: ${Math.round(gap).toLocaleString()}`;
+}
+function toggleRaceReplay() {
+    const button = document.getElementById('raceReplayBtn');
+    if (raceReplayTimer) { clearInterval(raceReplayTimer); raceReplayTimer = null; if (button) button.innerText = 'Replay Race'; return; }
+    if (raceHistory.length < 2) return;
+    let index = 0; const slider = document.getElementById('raceReplaySlider'); if (button) button.innerText = 'Stop Replay'; showRaceReplay(index);
+    raceReplayTimer = setInterval(() => { index++; if (index >= raceHistory.length) { clearInterval(raceReplayTimer); raceReplayTimer = null; if (button) button.innerText = 'Replay Race'; index = raceHistory.length - 1; } if (slider) slider.value = index; showRaceReplay(index); }, 700);
+}
+function clearRaceHistory() {
+    if (!confirm('Clear all saved race history for this counter?')) return;
+    raceHistory = []; lastRaceSample = 0; try { localStorage.removeItem(RACE_HISTORY_KEY); } catch (_) {}
+    updateReplayControls(); updateRaceStats();
+    const display = document.getElementById('raceReplayDisplay'); if (display) display.innerText = 'No history yet.';
+}
+function escapeRaceText(value) { return String(value).replace(/[&<>"']/g, char => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[char])); }
