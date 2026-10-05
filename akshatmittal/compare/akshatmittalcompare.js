@@ -8,7 +8,7 @@ window.onload = async () => {
         boxColor: '#ffffff', bgColor: '#eef5f9', nameColor: '#605a64', mainFont: 'Roboto, sans-serif',
         textColor: '#605a64', footerColor: '#67757c', counterFontWeight: '300', odometerSpeed: 0.5,
         gapMethod: 'absolute',
-        akshatmittalSettings: { countEditBox: false, showSocialMedia: true, showSubscribeAndChangeButtons: true, showTrophy: true },
+        akshatmittalSettings: { countEditBox: false, showSocialMedia: true, showSubscribeAndChangeButtons: true, showTrophy: true, subscribeButton: true, milestoneSlowdown: false },
         partialExports: { akshatmittalSettings: true }
     };
     example_data = mergeWithExampleData(extraKeys, example_data);
@@ -18,6 +18,7 @@ window.onload = async () => {
         items: [
             { title: 'Show boxes for editing counts in header', value: false, type: 'checkbox', path: 'data.akshatmittalSettings.countEditBox' },
             { title: 'Pressing "Subscribe" increases count by 1', value: true, type: 'checkbox', path: 'data.akshatmittalSettings.subscribeButton' },
+            { title: 'Slow down near subscriber milestones', value: false, type: 'checkbox', path: 'data.akshatmittalSettings.milestoneSlowdown' },
             { title: 'Show social media buttons', value: true, type: 'checkbox', path: 'data.akshatmittalSettings.showSocialMedia' },
             { title: 'Show "Subscribe" and "Change" buttons', value: true, type: 'checkbox', path: 'data.akshatmittalSettings.showSubscribeAndChangeButtons' },
             { title: 'Show trophy icon for leading channel', value: true, type: 'checkbox', path: 'data.akshatmittalSettings.showTrophy' }
@@ -68,22 +69,78 @@ async function processImport(imported) {
     updateGainTypes(2);
     displayTrophy(data.data[0].getDisplayedCount(), data.data[1].getDisplayedCount());
     initRaceAnalytics();
+    initMilestoneSlowdown();
     return imported;
 }
 
 function afterDrawingMenu2() {
     updateGainTypes(2); fillMenus(); saveAPISettings(false); refreshCount();
     document.getElementById('saveCountButtonLeft').addEventListener('click', () => {
-        const count = parseFloat(document.getElementById('left-input-count').value); if (isFinite(count)) data.data[0].count = count;
+        const count = parseFloat(document.getElementById('left-input-count').value); if (isFinite(count)) { data.data[0].count = count; resetMilestoneState(0); }
     });
     document.getElementById('saveCountButtonRight').addEventListener('click', () => {
-        const count = parseFloat(document.getElementById('right-input-count').value); if (isFinite(count)) data.data[1].count = count;
+        const count = parseFloat(document.getElementById('right-input-count').value); if (isFinite(count)) { data.data[1].count = count; resetMilestoneState(1); }
     });
 }
 
+let milestoneState = [null, null];
+
+function milestoneStep(count) {
+    const magnitude = Math.max(0, Math.floor(Math.log10(Math.max(1, Math.abs(count)))));
+    return Math.pow(10, Math.max(0, magnitude - 2));
+}
+
+function nextMilestone(count) {
+    const step = milestoneStep(count);
+    return Math.ceil((count + 1) / step) * step;
+}
+
+function applyMilestoneSlowdown(side, rawCount) {
+    if (!data.akshatmittalSettings.milestoneSlowdown || !Number.isFinite(rawCount)) {
+        milestoneState[side] = null;
+        return rawCount;
+    }
+
+    const previous = milestoneState[side];
+    const target = previous && rawCount >= previous.start ? previous.target : nextMilestone(rawCount);
+    const start = previous && rawCount >= previous.start ? previous.start : Math.floor((rawCount - 1) / milestoneStep(rawCount)) * milestoneStep(rawCount);
+    const step = milestoneStep(rawCount);
+    const distance = target - rawCount;
+    const interval = Math.max(step, target - start);
+    const rawJump = previous && Number.isFinite(previous.raw) ? rawCount - previous.raw : 0;
+
+    if (rawCount >= target) {
+        if (rawJump >= 1000) {
+            milestoneState[side] = { start: target, target: nextMilestone(target), raw: rawCount };
+            return rawCount;
+        }
+        milestoneState[side] = { start: start, target: target, raw: rawCount };
+        return Math.max(start, start + Math.floor(interval * 0.9));
+    }
+
+    // The closer the count gets, the stronger the slowdown. At the milestone
+    // boundary, a normal (<1K) update is rejected and the display returns to
+    // the start of that milestone interval.
+    const progress = Math.max(0, Math.min(1, 1 - (distance / interval)));
+    const slowdown = Math.max(0.04, 1 - Math.pow(progress, 3) * 0.96);
+    const allowedJump = Math.max(1, Math.floor(Math.max(1, rawJump) * slowdown));
+    const effective = previous && Number.isFinite(previous.display) ? Math.min(rawCount, previous.display + allowedJump) : rawCount;
+
+    milestoneState[side] = { start: start, target: target, raw: rawCount, display: effective };
+    return effective;
+}
+
+function resetMilestoneState(side) { milestoneState[side] = null; }
+
+function initMilestoneSlowdown() {
+    milestoneState = [null, null];
+}
+
 function updateCounters2(doGains = true) {
-    const count1 = data.data[0].getDisplayedCount();
-    const count2 = data.data[1].getDisplayedCount();
+    const rawCount1 = data.data[0].getDisplayedCount();
+    const rawCount2 = data.data[1].getDisplayedCount();
+    const count1 = applyMilestoneSlowdown(0, rawCount1);
+    const count2 = applyMilestoneSlowdown(1, rawCount2);
     document.getElementById('yt_subs_vs1').innerText = count1;
     document.getElementById('yt_subs_vs2').innerText = count2;
     const gap = Math.abs(count1 - count2);
