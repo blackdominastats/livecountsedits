@@ -14,7 +14,7 @@ window.onload = async () => {
     example_data = mergeWithExampleData(extraKeys, example_data);
 
     const insertedTab = {
-        title: 'Akshatmittal Theme Settings',
+        title: 'Technical Settings',
         items: [
             { title: 'Show boxes for editing counts in header', value: false, type: 'checkbox', path: 'data.akshatmittalSettings.countEditBox' },
             { title: 'Pressing "Subscribe" increases count by 1', value: true, type: 'checkbox', path: 'data.akshatmittalSettings.subscribeButton' },
@@ -118,9 +118,6 @@ function applyMilestoneSlowdown(side, rawCount) {
         return Math.max(start, start + Math.floor(interval * 0.9));
     }
 
-    // The closer the count gets, the stronger the slowdown. At the milestone
-    // boundary, a normal (<1K) update is rejected and the display returns to
-    // the start of that milestone interval.
     const progress = Math.max(0, Math.min(1, 1 - (distance / interval)));
     const slowdown = Math.max(0.04, 1 - Math.pow(progress, 3) * 0.96);
     const allowedJump = Math.max(1, Math.floor(Math.max(1, rawJump) * slowdown));
@@ -241,39 +238,67 @@ function formatRate(rate) { return `${rate >= 0 ? '+' : ''}${rate.toFixed(1)}/mi
 
 function updateRaceStats() {
     const el = document.getElementById('raceStats');
-    if (!el || !raceHistory.length) return;
-    const first = raceHistory[0], last = raceHistory[raceHistory.length - 1];
-    const leftRate = ratePerMinute(first, last, 'left'), rightRate = ratePerMinute(first, last, 'right');
-    const recent = raceHistory.length > 1 ? raceHistory[raceHistory.length - 2] : first;
-    const recentLeft = ratePerMinute(recent, last, 'left'), recentRight = ratePerMinute(recent, last, 'right');
+    if (!el) return;
+    if (raceHistory.length < 2) { el.innerText = 'Collecting race data...'; return; }
+    const first = raceHistory[0];
+    const last = raceHistory[raceHistory.length - 1];
     const gap = Math.abs(last.left - last.right);
-    const leader = last.left === last.right ? null : (last.left > last.right ? 'left' : 'right');
-    const trailing = leader === 'left' ? 'right' : 'left';
-    const relativeRate = trailing === 'left' ? leftRate - rightRate : rightRate - leftRate;
-    const projection = relativeRate > 0 && gap > 0 ? `${(gap / relativeRate).toFixed(1)} min` : 'Not projected';
-    el.innerHTML = `<div><strong>Average growth:</strong> ${formatRate(leftRate)} vs ${formatRate(rightRate)}</div><div><strong>Recent growth:</strong> ${formatRate(recentLeft)} vs ${formatRate(recentRight)}</div><div><strong>Current gap:</strong> ${Math.round(gap).toLocaleString()}</div><div><strong>Time to overtake:</strong> ${leader ? projection : 'Tied'}</div><div style="opacity:.7;font-size:.9rem;">Tracking ${raceHistory.length} samples over ${((last.time - first.time) / 60000).toFixed(1)} minutes.</div>`;
+    const leftRate = ratePerMinute(first, last, 'left');
+    const rightRate = ratePerMinute(first, last, 'right');
+    const recentStart = raceHistory[Math.max(0, raceHistory.length - 5)];
+    const recentLeftRate = ratePerMinute(recentStart, last, 'left');
+    const recentRightRate = ratePerMinute(recentStart, last, 'right');
+    let eta = 'Not currently on track to overtake';
+    if (last.left !== last.right) {
+        const leaderIsLeft = last.left > last.right;
+        const leader = leaderIsLeft ? last.left : last.right;
+        const follower = leaderIsLeft ? last.right : last.left;
+        const leaderRate = leaderIsLeft ? leftRate : rightRate;
+        const followerRate = leaderIsLeft ? rightRate : leftRate;
+        const rateDifference = followerRate - leaderRate;
+        if (rateDifference > 0) eta = `Estimated overtake: ${(Math.abs(leader - follower) / rateDifference).toFixed(1)} min`;
+    }
+    el.innerHTML = `<strong>Current gap:</strong> ${gap.toLocaleString()}<br><strong>Average growth:</strong> Left ${formatRate(leftRate)} &bull; Right ${formatRate(rightRate)}<br><strong>Recent growth:</strong> Left ${formatRate(recentLeftRate)} &bull; Right ${formatRate(recentRightRate)}<br><strong>${eta}</strong>`;
 }
+
 function updateReplayControls() {
-    const slider = document.getElementById('raceReplaySlider'); if (!slider) return;
-    slider.max = Math.max(0, raceHistory.length - 1); slider.value = Math.min(Number(slider.value), Number(slider.max));
+    const slider = document.getElementById('raceReplaySlider');
+    if (!slider) return;
+    slider.max = Math.max(0, raceHistory.length - 1);
+    slider.value = Math.min(Number(slider.value) || 0, Number(slider.max));
+    if (raceHistory.length) showRaceReplay(Number(slider.value));
 }
+
 function showRaceReplay(index) {
-    const display = document.getElementById('raceReplayDisplay'); if (!display || !raceHistory.length) return;
-    const item = raceHistory[Math.max(0, Math.min(index, raceHistory.length - 1))];
-    const gap = Math.abs(item.left - item.right);
-    display.innerHTML = `<strong>${new Date(item.time).toLocaleString()}</strong><br>${escapeRaceText(data.data[0].name || 'Left')}: ${Math.round(item.left).toLocaleString()} &nbsp; vs &nbsp; ${escapeRaceText(data.data[1].name || 'Right')}: ${Math.round(item.right).toLocaleString()}<br>Difference: ${Math.round(gap).toLocaleString()}`;
+    const display = document.getElementById('raceReplayDisplay');
+    if (!display || !raceHistory.length) return;
+    const point = raceHistory[Math.max(0, Math.min(index, raceHistory.length - 1))];
+    display.innerText = `${new Date(point.time).toLocaleString()} — Left: ${point.left.toLocaleString()} • Right: ${point.right.toLocaleString()} • Gap: ${Math.abs(point.left - point.right).toLocaleString()}`;
 }
+
 function toggleRaceReplay() {
     const button = document.getElementById('raceReplayBtn');
-    if (raceReplayTimer) { clearInterval(raceReplayTimer); raceReplayTimer = null; if (button) button.innerText = 'Replay Race'; return; }
+    if (raceReplayTimer) {
+        clearInterval(raceReplayTimer); raceReplayTimer = null; if (button) button.innerText = 'Replay Race'; return;
+    }
     if (raceHistory.length < 2) return;
-    let index = 0; const slider = document.getElementById('raceReplaySlider'); if (button) button.innerText = 'Stop Replay'; showRaceReplay(index);
-    raceReplayTimer = setInterval(() => { index++; if (index >= raceHistory.length) { clearInterval(raceReplayTimer); raceReplayTimer = null; if (button) button.innerText = 'Replay Race'; index = raceHistory.length - 1; } if (slider) slider.value = index; showRaceReplay(index); }, 700);
+    let index = Number(document.getElementById('raceReplaySlider').value) || 0;
+    if (index >= raceHistory.length - 1) index = 0;
+    if (button) button.innerText = 'Stop Replay';
+    raceReplayTimer = setInterval(() => {
+        const slider = document.getElementById('raceReplaySlider');
+        if (!slider) return;
+        index++;
+        if (index >= raceHistory.length) {
+            clearInterval(raceReplayTimer); raceReplayTimer = null; if (button) button.innerText = 'Replay Race'; return;
+        }
+        slider.value = index; showRaceReplay(index);
+    }, 500);
 }
+
 function clearRaceHistory() {
-    if (!confirm('Clear all saved race history for this counter?')) return;
-    raceHistory = []; lastRaceSample = 0; try { localStorage.removeItem(RACE_HISTORY_KEY); } catch (_) {}
-    updateReplayControls(); updateRaceStats();
-    const display = document.getElementById('raceReplayDisplay'); if (display) display.innerText = 'No history yet.';
+    if (!confirm('Clear all saved race history?')) return;
+    raceHistory = []; lastRaceSample = 0;
+    try { localStorage.removeItem(RACE_HISTORY_KEY); } catch (_) {}
+    updateRaceStats(); updateReplayControls();
 }
-function escapeRaceText(value) { return String(value).replace(/[&<>"']/g, char => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[char])); }
