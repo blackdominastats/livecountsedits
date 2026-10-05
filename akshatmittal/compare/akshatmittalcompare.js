@@ -90,18 +90,6 @@ window.onload = async () => {
     
     MENU.tabs.find(x => x.title === 'Design Settings & Styling').items.splice(6, 0, ...styleAdditions);
 
-    const gapMethodOption = {
-        title: 'Difference method',
-        value: 'absolute',
-        type: 'select',
-        path: 'data.gapMethod',
-        options: [['absolute', 'Absolute value'],
-        ['left', 'Left minus right'],
-        ['right', 'Right minus left']]
-    }
-
-    MENU.tabs.find(x => x.title === 'Technical Settings').items.push(gapMethodOption);
-
     try {
         data = await retrieveDataFromBrowser(COUNTER_THEME, 1);
         data = mergeWithExampleData(data, example_data);
@@ -182,12 +170,7 @@ function updateCounters2(doGains = true) {
     const count2 = data.data[1].getDisplayedCount();
     document.getElementById('yt_subs_vs1').innerText = count1;
     document.getElementById('yt_subs_vs2').innerText = count2;
-    let gap = count1 - count2;
-    if (data.gapMethod === 'right') {
-        gap = -gap;
-    } else if (data.gapMethod === 'absolute') {
-        gap = Math.abs(gap);
-    }
+    const gap = Math.abs(count1 - count2);
     document.getElementById('yt_diff').innerText = gap;
     displayTrophy(count1, count2);
 }
