@@ -70,7 +70,7 @@
     function init() {
         loadHistory();
         const menu = document.querySelector('.menu');
-        if (!menu || document.getElementById('growthRatePanel')) return;
+        if (!menu || document.getElementById('growthRatePanel') || !window.data?.data) return false;
         const card = document.createElement('div');
         card.className = 'container';
         card.style.cssText = 'margin-top:20px;margin-bottom:20px;';
@@ -85,8 +85,14 @@
         setInterval(() => { sample(); render(); }, 2000);
         sample(true);
         render();
+        return true;
     }
 
-    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
-    else setTimeout(init, 0);
+    function waitForCounter() {
+        if (init()) return;
+        setTimeout(waitForCounter, 250);
+    }
+
+    if (document.readyState === 'complete') waitForCounter();
+    else window.addEventListener('load', waitForCounter, { once: true });
 })();
