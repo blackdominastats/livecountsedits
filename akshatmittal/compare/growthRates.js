@@ -1,10 +1,11 @@
 (() => {
     const KEY = 'akshatmittalcompare-growth-rate-history';
-    const SHOW_KEY = 'akshatmittalcompare-show-growth-rates';
     const SAMPLE_INTERVAL = 60000;
     const WINDOW = 24 * 60 * 60 * 1000;
+    const SETTING_PATH = 'showGrowthRates';
     let history = [];
     let lastSample = 0;
+    let started = false;
 
     function loadHistory() {
         try { history = JSON.parse(localStorage.getItem(KEY) || '[]'); } catch (_) { history = []; }
@@ -57,7 +58,7 @@
     }
 
     function showEnabled() {
-        return localStorage.getItem(SHOW_KEY) === '1';
+        return !!data?.akshatmittalSettings?.[SETTING_PATH];
     }
 
     function render() {
@@ -72,24 +73,18 @@
         body.innerHTML = windows.map(([label, ms]) => `<tr><td><strong>${label}</strong></td><td>${leftName}: ${format(rate(0, ms))}</td><td>${rightName}: ${format(rate(1, ms))}</td></tr>`).join('');
     }
 
-    function installTechnicalSetting() {
-        const tabStuff = document.querySelector('.tab-stuff');
-        if (!tabStuff || document.getElementById('growthRateTechnicalSetting')) return;
-        const technicalContent = tabStuff.textContent || '';
-        if (!technicalContent.includes('Show boxes for editing counts in header')) return;
-
-        const section = document.createElement('div');
-        section.id = 'growthRateTechnicalSetting';
-        section.style.cssText = 'margin-top:12px;padding:12px;border:1px solid rgba(128,128,128,.25);border-radius:4px;';
-        section.innerHTML = `<strong>Growth Rates</strong><label style="display:block;cursor:pointer;margin:10px 0 0;"><input type="checkbox" id="growthRateTechnicalToggle" style="margin-right:8px;">Show per minute, per hour and per day growth rates</label><small style="display:block;margin-top:6px;opacity:.7;">Rates refresh every 2 seconds. Historical samples are kept for up to 24 hours.</small>`;
-        tabStuff.appendChild(section);
-
-        const toggle = document.getElementById('growthRateTechnicalToggle');
-        toggle.checked = showEnabled();
-        toggle.addEventListener('change', () => {
-            localStorage.setItem(SHOW_KEY, toggle.checked ? '1' : '0');
-            render();
+    function addTechnicalMenuItem() {
+        if (!window.MENU || !Array.isArray(MENU.tabs)) return false;
+        const technical = MENU.tabs.find(x => x.title === 'Technical Settings');
+        if (!technical || !Array.isArray(technical.items)) return false;
+        if (technical.items.some(x => x.title === 'Show per minute, per hour and per day growth rates')) return false;
+        technical.items.push({
+            title: 'Show per minute, per hour and per day growth rates',
+            value: !!data?.akshatmittalSettings?.[SETTING_PATH],
+            type: 'checkbox',
+            path: 'data.akshatmittalSettings.' + SETTING_PATH
         });
+        return true;
     }
 
     function ensureRatePanel() {
@@ -102,35 +97,37 @@
         menu.parentNode.insertBefore(card, menu);
     }
 
-    function wireTechnicalTab() {
-        const controls = document.querySelector('.tab-controls');
-        if (!controls || controls.dataset.growthRatesWired === '1') return;
-        controls.dataset.growthRatesWired = '1';
-        controls.addEventListener('click', () => setTimeout(installTechnicalSetting, 50));
-        setTimeout(installTechnicalSetting, 50);
-    }
-
-    function init() {
-        if (!window.data?.data) return false;
+    async function init() {
+        if (started || !window.data?.data) return false;
+        started = true;
+        if (!data.akshatmittalSettings) data.akshatmittalSettings = {};
+        if (typeof data.akshatmittalSettings[SETTING_PATH] !== 'boolean') data.akshatmittalSettings[SETTING_PATH] = false;
         loadHistory();
         ensureRatePanel();
-        wireTechnicalTab();
         sample(true);
+        render();
         setInterval(() => {
             sample();
             render();
-            wireTechnicalTab();
-            installTechnicalSetting();
         }, 2000);
-        render();
         return true;
     }
 
-    function waitForCounter() {
-        if (init()) return;
-        setTimeout(waitForCounter, 250);
+    function installAfterMainLoad() {
+        const originalOnload = window.onload;
+        window.onload = async function (...args) {
+            if (originalOnload) await originalOnload.apply(this, args);
+            if (!window.data?.data) return;
+            if (!data.akshatmittalSettings) data.akshatmittalSettings = {};
+            if (typeof data.akshatmittalSettings[SETTING_PATH] !== 'boolean') data.akshatmittalSettings[SETTING_PATH] = false;
+            const added = addTechnicalMenuItem();
+            if (added) {
+                drawMenu(MENU, document.querySelector('.tabs'), document.querySelector('.tab-stuff'), document.querySelector('.tab-controls'));
+                if (typeof afterDrawingMenu === 'function') afterDrawingMenu();
+            }
+            await init();
+        };
     }
 
-    if (document.readyState === 'complete') waitForCounter();
-    else window.addEventListener('load', waitForCounter, { once: true });
+    installAfterMainLoad();
 })();
