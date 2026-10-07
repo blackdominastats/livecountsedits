@@ -75,6 +75,8 @@
     function installTechnicalSetting() {
         const tabStuff = document.querySelector('.tab-stuff');
         if (!tabStuff || document.getElementById('growthRateTechnicalSetting')) return;
+        const technicalContent = tabStuff.textContent || '';
+        if (!technicalContent.includes('Show boxes for editing counts in header')) return;
 
         const section = document.createElement('div');
         section.id = 'growthRateTechnicalSetting';
@@ -118,6 +120,7 @@
             sample();
             render();
             wireTechnicalTab();
+            installTechnicalSetting();
         }, 2000);
         render();
         return true;
