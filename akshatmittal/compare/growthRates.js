@@ -74,10 +74,10 @@
     }
 
     function addTechnicalMenuItem() {
-        if (!window.MENU || !Array.isArray(MENU.tabs)) return false;
+        if (typeof MENU === 'undefined' || !Array.isArray(MENU.tabs)) return false;
         const technical = MENU.tabs.find(x => x.title === 'Technical Settings');
         if (!technical || !Array.isArray(technical.items)) return false;
-        if (technical.items.some(x => x.title === 'Show per minute, per hour and per day growth rates')) return false;
+        if (technical.items.some(x => x.path === 'data.akshatmittalSettings.' + SETTING_PATH)) return false;
         technical.items.push({
             title: 'Show per minute, per hour and per day growth rates',
             value: !!data?.akshatmittalSettings?.[SETTING_PATH],
@@ -121,7 +121,7 @@
             if (!data.akshatmittalSettings) data.akshatmittalSettings = {};
             if (typeof data.akshatmittalSettings[SETTING_PATH] !== 'boolean') data.akshatmittalSettings[SETTING_PATH] = false;
             const added = addTechnicalMenuItem();
-            if (added) {
+            if (added && typeof drawMenu === 'function') {
                 drawMenu(MENU, document.querySelector('.tabs'), document.querySelector('.tab-stuff'), document.querySelector('.tab-controls'));
                 if (typeof afterDrawingMenu === 'function') afterDrawingMenu();
             }
