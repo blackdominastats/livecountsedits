@@ -51,7 +51,8 @@
 
     function format(value) {
         if (value === null || !Number.isFinite(value)) return 'Collecting...';
-        return `${value >= 0 ? '+' : ''}${Math.abs(value) >= 100 ? value.toFixed(0) : value.toFixed(1)}`;
+        const magnitude = Math.abs(value) >= 100 ? Math.abs(value).toFixed(0) : Math.abs(value).toFixed(1);
+        return `${value > 0 ? '+' : value < 0 ? '-' : ''}${magnitude}`;
     }
 
     function render() {
