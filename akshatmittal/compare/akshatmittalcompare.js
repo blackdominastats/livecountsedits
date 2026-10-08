@@ -75,6 +75,30 @@ async function processImport(imported) {
 
 function afterDrawingMenu2() {
     updateGainTypes(2); fillMenus(); saveAPISettings(false); refreshCount();
+
+    // Replace both non-functional "Change" controls with side-specific Unsubscribe buttons.
+    document.querySelectorAll('#yt_compare_vs1, #yt_compare_vs2').forEach((element) => {
+        if (element.dataset.unsubscribeHandler === 'true') return;
+
+        const side = element.id === 'yt_compare_vs1' ? 0 : 1;
+        const label = element.querySelector('.font-light');
+        if (label) label.innerHTML = '<i class="fa fa-user-minus"></i> Unsubscribe';
+        else element.textContent = 'Unsubscribe';
+
+        element.dataset.unsubscribeHandler = 'true';
+        element.style.cursor = 'pointer';
+        element.onclick = async (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+
+            if (!data?.data?.[side]) return;
+            data.data[side].count -= 1;
+            resetMilestoneState(side);
+            refreshCount();
+            await saveDataInBrowser(COUNTER_THEME, data);
+        };
+    });
+
     document.getElementById('saveCountButtonLeft').addEventListener('click', () => {
         const count = parseFloat(document.getElementById('left-input-count').value); if (isFinite(count)) { data.data[0].count = count; resetMilestoneState(0); }
     });
@@ -190,7 +214,6 @@ function fix(noOdo = false) {
     document.getElementById('shareOnTwitterColor').innerText = colorDistanceSquared < 2000 ? '.text-muted { color: white !important; }' : '';
     if (!noOdo) updateOdo();
 }
-
 async function unoReverse() {
     alert('This will refresh the page');
     data.data = [data.data[1], data.data[0]];
@@ -240,65 +263,48 @@ function updateRaceStats() {
     const el = document.getElementById('raceStats');
     if (!el) return;
     if (raceHistory.length < 2) { el.innerText = 'Collecting race data...'; return; }
-    const first = raceHistory[0];
-    const last = raceHistory[raceHistory.length - 1];
-    const gap = Math.abs(last.left - last.right);
-    const leftRate = ratePerMinute(first, last, 'left');
-    const rightRate = ratePerMinute(first, last, 'right');
-    const recentStart = raceHistory[Math.max(0, raceHistory.length - 5)];
-    const recentLeftRate = ratePerMinute(recentStart, last, 'left');
-    const recentRightRate = ratePerMinute(recentStart, last, 'right');
-    let eta = 'Not currently on track to overtake';
-    if (last.left !== last.right) {
-        const leaderIsLeft = last.left > last.right;
-        const leader = leaderIsLeft ? last.left : last.right;
-        const follower = leaderIsLeft ? last.right : last.left;
-        const leaderRate = leaderIsLeft ? leftRate : rightRate;
-        const followerRate = leaderIsLeft ? rightRate : leftRate;
-        const rateDifference = followerRate - leaderRate;
-        if (rateDifference > 0) eta = `Estimated overtake: ${(Math.abs(leader - follower) / rateDifference).toFixed(1)} min`;
-    }
-    el.innerHTML = `<strong>Current gap:</strong> ${gap.toLocaleString()}<br><strong>Average growth:</strong> Left ${formatRate(leftRate)} &bull; Right ${formatRate(rightRate)}<br><strong>Recent growth:</strong> Left ${formatRate(recentLeftRate)} &bull; Right ${formatRate(recentRightRate)}<br><strong>${eta}</strong>`;
+    const first = raceHistory[0], last = raceHistory[raceHistory.length - 1];
+    const elapsedMinutes = Math.max(0.01, (last.time - first.time) / 60000);
+    const leftGain = last.left - first.left;
+    const rightGain = last.right - first.right;
+    const lead = Math.abs(last.left - last.right);
+    const leftRate = leftGain / elapsedMinutes;
+    const rightRate = rightGain / elapsedMinutes;
+    el.innerHTML = `<strong>${first.left.toLocaleString()} → ${last.left.toLocaleString()}</strong> (${formatRate(leftRate)})<br><strong>${first.right.toLocaleString()} → ${last.right.toLocaleString()}</strong> (${formatRate(rightRate)})<br>Current gap: <strong>${lead.toLocaleString()}</strong>`;
 }
 
 function updateReplayControls() {
     const slider = document.getElementById('raceReplaySlider');
     if (!slider) return;
     slider.max = Math.max(0, raceHistory.length - 1);
-    slider.value = Math.min(Number(slider.value) || 0, Number(slider.max));
-    if (raceHistory.length) showRaceReplay(Number(slider.value));
+    slider.value = Math.max(0, raceHistory.length - 1);
 }
 
 function showRaceReplay(index) {
     const display = document.getElementById('raceReplayDisplay');
-    if (!display || !raceHistory.length) return;
-    const point = raceHistory[Math.max(0, Math.min(index, raceHistory.length - 1))];
-    display.innerText = `${new Date(point.time).toLocaleString()} — Left: ${point.left.toLocaleString()} • Right: ${point.right.toLocaleString()} • Gap: ${Math.abs(point.left - point.right).toLocaleString()}`;
+    if (!display || !raceHistory[index]) return;
+    const point = raceHistory[index];
+    display.innerHTML = `<strong>${new Date(point.time).toLocaleString()}</strong><br>Left: ${point.left.toLocaleString()} &nbsp; vs &nbsp; Right: ${point.right.toLocaleString()}<br>Gap: ${Math.abs(point.left - point.right).toLocaleString()}`;
 }
 
 function toggleRaceReplay() {
-    const button = document.getElementById('raceReplayBtn');
-    if (raceReplayTimer) {
-        clearInterval(raceReplayTimer); raceReplayTimer = null; if (button) button.innerText = 'Replay Race'; return;
-    }
+    if (raceReplayTimer) { clearInterval(raceReplayTimer); raceReplayTimer = null; return; }
     if (raceHistory.length < 2) return;
-    let index = Number(document.getElementById('raceReplaySlider').value) || 0;
-    if (index >= raceHistory.length - 1) index = 0;
-    if (button) button.innerText = 'Stop Replay';
+    let index = 0;
+    showRaceReplay(index);
+    document.getElementById('raceReplaySlider').value = index;
     raceReplayTimer = setInterval(() => {
-        const slider = document.getElementById('raceReplaySlider');
-        if (!slider) return;
         index++;
-        if (index >= raceHistory.length) {
-            clearInterval(raceReplayTimer); raceReplayTimer = null; if (button) button.innerText = 'Replay Race'; return;
-        }
-        slider.value = index; showRaceReplay(index);
-    }, 500);
+        if (index >= raceHistory.length) { clearInterval(raceReplayTimer); raceReplayTimer = null; return; }
+        document.getElementById('raceReplaySlider').value = index;
+        showRaceReplay(index);
+    }, 1000);
 }
 
 function clearRaceHistory() {
-    if (!confirm('Clear all saved race history?')) return;
-    raceHistory = []; lastRaceSample = 0;
+    raceHistory = [];
+    lastRaceSample = 0;
     try { localStorage.removeItem(RACE_HISTORY_KEY); } catch (_) {}
-    updateRaceStats(); updateReplayControls();
+    updateRaceStats();
+    updateReplayControls();
 }
