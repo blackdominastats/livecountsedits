@@ -8,7 +8,7 @@ window.onload = async () => {
         boxColor: '#ffffff', bgColor: '#eef5f9', nameColor: '#605a64', mainFont: 'Roboto, sans-serif',
         textColor: '#605a64', footerColor: '#67757c', counterFontWeight: '300', odometerSpeed: 0.5,
         gapMethod: 'absolute',
-        akshatmittalSettings: { countEditBox: false, showSocialMedia: true, showSubscribeAndChangeButtons: true, showTrophy: true, subscribeButton: true, milestoneSlowdown: false },
+        akshatmittalSettings: { countEditBox: false, showSocialMedia: true, showSubscribeAndChangeButtons: true, showTrophy: true, subscribeButton: true, milestoneSlowdown: false, abbreviateLeft: false, abbreviateRight: false },
         partialExports: { akshatmittalSettings: true }
     };
     example_data = mergeWithExampleData(extraKeys, example_data);
@@ -19,6 +19,8 @@ window.onload = async () => {
             { title: 'Show boxes for editing counts in header', value: false, type: 'checkbox', path: 'data.akshatmittalSettings.countEditBox' },
             { title: 'Pressing "Subscribe" increases count by 1', value: true, type: 'checkbox', path: 'data.akshatmittalSettings.subscribeButton' },
             { title: 'Slow down near subscriber milestones', value: false, type: 'checkbox', path: 'data.akshatmittalSettings.milestoneSlowdown' },
+            { title: 'Abbreviate left count', value: false, type: 'checkbox', path: 'data.akshatmittalSettings.abbreviateLeft', func: function () { refreshCount(); } },
+            { title: 'Abbreviate right count', value: false, type: 'checkbox', path: 'data.akshatmittalSettings.abbreviateRight', func: function () { refreshCount(); } },
             { title: 'Show social media buttons', value: true, type: 'checkbox', path: 'data.akshatmittalSettings.showSocialMedia' },
             { title: 'Show "Subscribe" and "Change" buttons', value: true, type: 'checkbox', path: 'data.akshatmittalSettings.showSubscribeAndChangeButtons' },
             { title: 'Show trophy icon for leading channel', value: true, type: 'checkbox', path: 'data.akshatmittalSettings.showTrophy' }
@@ -30,6 +32,8 @@ window.onload = async () => {
         { title: 'Footer color', type: 'color', path: 'data.footerColor' }
     ];
     MENU.tabs.splice(-2, 0, insertedTab);
+    const commonTechnicalSettings = MENU.tabs.find(x => x.title === 'Technical Settings' && x !== insertedTab);
+    if (commonTechnicalSettings) commonTechnicalSettings.items = commonTechnicalSettings.items.filter(item => item.title !== 'Abbreviate count');
     MENU.tabs.find(x => x.title === 'Import & Export Data').items.splice(-3, 0, partialExportAddition);
     MENU.tabs.find(x => x.title === 'Design Settings & Styling').items.splice(6, 0, ...styleAdditions);
 
@@ -157,6 +161,38 @@ function initMilestoneSlowdown() {
     milestoneState = [null, null];
 }
 
+function getAbbreviatedDisplay(side, count) {
+    return data.akshatmittalSettings[side === 0 ? 'abbreviateLeft' : 'abbreviateRight'] ? abbs(count) : count;
+}
+
+function updateAbbreviatedDisplays(count1, count2) {
+    const settings = data.akshatmittalSettings;
+    const entries = [
+        [0, 'yt_subs_vs1', count1, settings.abbreviateLeft],
+        [1, 'yt_subs_vs2', count2, settings.abbreviateRight]
+    ];
+
+    entries.forEach(([side, id, count, abbreviated]) => {
+        const odometer = document.getElementById(id);
+        if (!odometer) return;
+        let display = document.getElementById(id + '_abbreviated');
+        if (!display) {
+            display = document.createElement('h1');
+            display.id = id + '_abbreviated';
+            display.className = 'display-1';
+            display.style.fontFamily = data.mainFont;
+            display.style.fontWeight = data.counterFontWeight;
+            display.style.textAlign = 'center';
+            odometer.parentNode.insertBefore(display, odometer.nextSibling);
+        }
+        display.style.fontFamily = data.mainFont;
+        display.style.fontWeight = data.counterFontWeight;
+        display.innerText = abbreviated ? abbs(count) : '';
+        odometer.style.display = abbreviated ? 'none' : '';
+        display.style.display = abbreviated ? '' : 'none';
+    });
+}
+
 function updateCounters2(doGains = true) {
     const rawCount1 = data.data[0].getDisplayedCount();
     const rawCount2 = data.data[1].getDisplayedCount();
@@ -164,6 +200,7 @@ function updateCounters2(doGains = true) {
     const count2 = applyMilestoneSlowdown(1, rawCount2);
     document.getElementById('yt_subs_vs1').innerText = count1;
     document.getElementById('yt_subs_vs2').innerText = count2;
+    updateAbbreviatedDisplays(count1, count2);
     const gap = Math.abs(count1 - count2);
     document.getElementById('yt_diff').innerText = gap;
     const leaderCount = Math.max(count1, count2);
