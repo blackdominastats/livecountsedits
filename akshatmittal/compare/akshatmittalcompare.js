@@ -80,7 +80,6 @@ async function processImport(imported) {
 function afterDrawingMenu2() {
     updateGainTypes(2); fillMenus(); saveAPISettings(false); refreshCount();
 
-    // Replace both non-functional "Change" controls with side-specific Unsubscribe buttons.
     document.querySelectorAll('#yt_compare_vs1, #yt_compare_vs2').forEach((element) => {
         if (element.dataset.unsubscribeHandler === 'true') return;
 
@@ -161,18 +160,28 @@ function initMilestoneSlowdown() {
     milestoneState = [null, null];
 }
 
+function abbreviateToThreeDigits(count) {
+    if (!Number.isFinite(count)) return count;
+    const sign = count < 0 ? -1 : 1;
+    const absolute = Math.abs(count);
+    if (absolute < 1000) return count;
+    const magnitude = Math.floor(Math.log10(absolute));
+    const divisor = Math.pow(10, magnitude - 2);
+    return sign * Math.floor(absolute / divisor) * divisor;
+}
+
 function getAbbreviatedDisplay(side, count) {
-    return data.akshatmittalSettings[side === 0 ? 'abbreviateLeft' : 'abbreviateRight'] ? abbs(count) : count;
+    return data.akshatmittalSettings[side === 0 ? 'abbreviateLeft' : 'abbreviateRight'] ? abbreviateToThreeDigits(count) : count;
 }
 
 function updateAbbreviatedDisplays(count1, count2) {
     const settings = data.akshatmittalSettings;
     const entries = [
-        [0, 'yt_subs_vs1', count1, settings.abbreviateLeft],
-        [1, 'yt_subs_vs2', count2, settings.abbreviateRight]
+        ['yt_subs_vs1', count1, settings.abbreviateLeft],
+        ['yt_subs_vs2', count2, settings.abbreviateRight]
     ];
 
-    entries.forEach(([side, id, count, abbreviated]) => {
+    entries.forEach(([id, count, abbreviated]) => {
         const odometer = document.getElementById(id);
         if (!odometer) return;
         let display = document.getElementById(id + '_abbreviated');
@@ -187,7 +196,7 @@ function updateAbbreviatedDisplays(count1, count2) {
         }
         display.style.fontFamily = data.mainFont;
         display.style.fontWeight = data.counterFontWeight;
-        display.innerText = abbreviated ? abbs(count) : '';
+        display.innerText = abbreviated ? abbreviateToThreeDigits(count) : '';
         odometer.style.display = abbreviated ? 'none' : '';
         display.style.display = abbreviated ? '' : 'none';
     });
