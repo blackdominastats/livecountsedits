@@ -28,30 +28,37 @@
     <style id="shareOnTwitterColor"></style>
     <style id="noTrophy"></style>
     <style>
-        .subscribe-button {
+        .subscribe-button, .unsubscribe-button {
             width: 100%;
             border: 0;
             color: #fff;
             font: inherit;
             text-align: center;
             line-height: inherit;
-            -webkit-appearance: none;
-            appearance: none;
             touch-action: manipulation;
         }
-        .subscribe-button:focus { outline: none; }
-        .unsubscribe-button {
-            width: 100%;
-            border: 0;
-            color: #fff;
-            font: inherit;
-            text-align: center;
-            line-height: inherit;
-            cursor: pointer;
-            touch-action: manipulation;
-        }
-        .unsubscribe-button:focus { outline: none; }
+        .subscribe-button:focus, .unsubscribe-button:focus { outline: none; }
+        .unsubscribe-button { cursor: pointer; }
     </style>
+    <script>
+        // Define these immediately so the controls work even if the compare JS is cached.
+        async function unsubscribeLeft(event) {
+            if (event) { event.preventDefault(); event.stopPropagation(); }
+            if (!window.data || !data.data || !data.data[0]) return;
+            data.data[0].count -= 1;
+            if (typeof resetMilestoneState === 'function') resetMilestoneState(0);
+            if (typeof refreshCount === 'function') refreshCount();
+            if (typeof saveDataInBrowser === 'function') await saveDataInBrowser('akshatmittalcompare', data);
+        }
+        async function unsubscribeRight(event) {
+            if (event) { event.preventDefault(); event.stopPropagation(); }
+            if (!window.data || !data.data || !data.data[1]) return;
+            data.data[1].count -= 1;
+            if (typeof resetMilestoneState === 'function') resetMilestoneState(1);
+            if (typeof refreshCount === 'function') refreshCount();
+            if (typeof saveDataInBrowser === 'function') await saveDataInBrowser('akshatmittalcompare', data);
+        }
+    </script>
 </head>
 <body class="fix-header fix-sidebar card-no-border">
     <div class="dark-bg"></div>
