@@ -22,6 +22,7 @@ jobs:
         run: |
           python3 <<'PY'
           from pathlib import Path
+          import re
 
           js_path = Path('top50/index.js')
           js = js_path.read_text()
@@ -85,14 +86,15 @@ jobs:
 
           html_path = Path('top50/index.html')
           html = html_path.read_text()
-          old_html = '''                    <label>Update fire icons every <input class="s-width" type="number" id="intervalsPerUpdate"
-                            value="1"> update interval(s)</label>'''
-          new_html = '''                    <label>Update fire icons every <input class="s-width" type="number" id="fireUpdateMin"
-                            min="1" step="0.1" value="2"> seconds</label>\n                    <label>To (optional): <input class="s-width" type="number" id="fireUpdateMax"
-                            min="1" step="0.1" value="2"> seconds</label>\n                    <p>If the two values differ, the next fire update is randomly scheduled between the minimum and maximum.</p>'''
-          if old_html not in html:
+          pattern = r'(?m)^\s*<label>Update fire icons every\s*<input[^>]*id=["\']intervalsPerUpdate["\'][^>]*>\s*update interval\(s\)</label>'
+          replacement = '''                    <label>Update fire icons every <input class="s-width" type="number" id="fireUpdateMin"
+                            min="1" step="0.1" value="2"> seconds</label>
+                    <label>To (optional): <input class="s-width" type="number" id="fireUpdateMax"
+                            min="1" step="0.1" value="2"> seconds</label>
+                    <p>If the two values differ, the next fire update is randomly scheduled between the minimum and maximum.</p>'''
+          html, count = re.subn(pattern, replacement, html, count=1)
+          if count != 1:
               raise SystemExit('Could not find fire timing HTML')
-          html = html.replace(old_html, new_html, 1)
           html = html.replace('Initial fire delay (update intervals):', 'Initial fire delay (seconds):', 1)
           html_path.write_text(html)
 
