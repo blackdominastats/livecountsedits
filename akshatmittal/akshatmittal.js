@@ -138,26 +138,6 @@ function afterDrawingMenu2() {
     saveAPISettings(false);
     refreshCount();
 
-    // Akshatmittal uses a non-functional "Change" button next to Subscribe.
-    // Replace it with an Unsubscribe button that removes exactly one subscriber.
-    document.querySelectorAll('button, a, div').forEach((element) => {
-        if (element.dataset.unsubscribeHandler === 'true') return;
-        if (element.textContent.trim() !== 'Change') return;
-
-        element.textContent = 'Unsubscribe';
-        element.dataset.unsubscribeHandler = 'true';
-        element.style.cursor = 'pointer';
-        element.onclick = async (event) => {
-            event.preventDefault();
-            event.stopPropagation();
-
-            if (!data?.data?.[0]) return;
-            data.data[0].count -= 1;
-            refreshCount();
-            await saveDataInBrowser(COUNTER_THEME, data);
-        };
-    });
-
     document.getElementById('yt_searchbutton').addEventListener('click', () => {
         if (!data.akshatmittalSettings.countEditBox) return;
         const count = parseFloat(document.getElementById('yt_searchvalue').value);

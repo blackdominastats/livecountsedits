@@ -18,7 +18,7 @@ let data = {};
 let gainTable = {};
 let glowingCards = [];
 let fires = new Map();
-let fireUpdateTimeout = null;
+let fireDelayUpdatesRemaining = 0;
 let appendedMDMStyles = false;
 
 // override function in importData
@@ -122,8 +122,7 @@ let example_data = {
         'firePosition': 'above',
         'fireBorderColor': '#000',
         'fireBorderWidth': 0,
-        'updateTimeMin': 2,
-        'updateTimeMax': 2,
+        'intervalsPerUpdate': 1,
         'fireObservedGains': true,
         'initialFireDelay': 0,
         'created': []
@@ -325,16 +324,6 @@ async function initLoad(redo, previousTheme) {
 
     data.fireIcons.created.forEach(x => { if (!x.fontWeight) x.fontWeight = 900;})
 
-    // Migrate the old interval-based fire timing to seconds.
-    if (data.fireIcons.updateTimeMin == null || data.fireIcons.updateTimeMax == null) {
-        const legacyIntervals = Math.max(1, parseInt(data.fireIcons.intervalsPerUpdate) || 1);
-        const updateSeconds = Math.max(1, (parseFloat(data.updateInterval) || 2000) / 1000);
-        const legacySeconds = Math.max(1, Math.round(legacyIntervals * updateSeconds));
-        data.fireIcons.updateTimeMin = legacySeconds;
-        data.fireIcons.updateTimeMax = legacySeconds;
-    }
-    delete data.fireIcons.intervalsPerUpdate;
-
     // Reset sizes if switching away from top1
     if (redo && previousTheme && previousTheme === 'top1' && data.theme !== 'top1') {
         const defaultCardWidth = 19;
@@ -501,7 +490,7 @@ async function initLoad(redo, previousTheme) {
     fix();
     document.querySelectorAll("#container,#settings").forEach(x => x.style.backgroundColor = document.getElementById("backPicker").value);
     adjustColors();
-    scheduleFireUpdate(true);
+    fireDelayUpdatesRemaining = Math.max(0, parseInt(data.fireIcons.initialFireDelay) || 0);
     if (!data.pause) {
         updateInterval = setInterval(update, data.updateInterval);
         update();
@@ -957,37 +946,6 @@ function setupMDMStyles() {
     appendedMDMStyles = true;
 }
 
-function getFireUpdateDelayMs(initial = false) {
-    if (initial) {
-        const initialDelay = Math.max(0, parseFloat(data.fireIcons.initialFireDelay) || 0);
-        if (initialDelay > 0) return initialDelay * 1000;
-    }
-    const minSeconds = Math.max(1, parseFloat(data.fireIcons.updateTimeMin) || 1);
-    const maxSeconds = Math.max(minSeconds, parseFloat(data.fireIcons.updateTimeMax) || minSeconds);
-    const seconds = minSeconds + Math.random() * (maxSeconds - minSeconds);
-    return Math.min(seconds * 1000, 2147483647);
-}
-
-function scheduleFireUpdate(initial = false) {
-    if (fireUpdateTimeout) {
-        clearTimeout(fireUpdateTimeout);
-        fireUpdateTimeout = null;
-    }
-    if (!data || data.pause || !data.fireIcons.enabled) return;
-
-    fireUpdateTimeout = setTimeout(() => {
-        fireUpdateTimeout = null;
-        if (!data.pause && data.fireIcons.enabled) {
-            try {
-                calculateFires();
-            } catch (err) {
-                console.error('Fire icon update failed:', err);
-            }
-        }
-        scheduleFireUpdate(false);
-    }, getFireUpdateDelayMs(initial));
-}
-
 function update(doGains = true) {
     let intervalNumber = data.intervalCount;
     if (data.debugMode) console.time(`Update #${intervalNumber + 1} took`)
@@ -1080,6 +1038,15 @@ function update(doGains = true) {
                 if (!appendedMDMStyles) {
                     setupMDMStyles();
                 }
+            }
+        }
+        const fireIntervals = Math.max(1, parseInt(data.fireIcons.intervalsPerUpdate) || 1);
+        if (data.fireIcons.enabled && data.intervalCount % fireIntervals === 0) {
+            if (fireDelayUpdatesRemaining > 0) {
+                fireDelayUpdatesRemaining--;
+                fires.clear();
+            } else {
+                calculateFires();
             }
         }
         for (let i = 0; i < data.max; i++) {
@@ -1777,25 +1744,8 @@ document.getElementById('importFromGoogleFonts').addEventListener('change', func
     fix();
 })
 
-document.getElementById('fireUpdateMin').addEventListener('change', function () {
-    let value = parseFloat(this.value);
-    if (!isFinite(value) || value < 1) value = 1;
-    this.value = value;
-    data.fireIcons.updateTimeMin = value;
-    if (data.fireIcons.updateTimeMax < value) data.fireIcons.updateTimeMax = value;
-    document.getElementById('fireUpdateMax').value = data.fireIcons.updateTimeMax;
-    scheduleFireUpdate(false);
-    saveInBrowser(COUNTER_THEME, false);
-})
-
-document.getElementById('fireUpdateMax').addEventListener('change', function () {
-    let value = parseFloat(this.value);
-    if (!isFinite(value) || value < 1) value = 1;
-    value = Math.max(value, parseFloat(data.fireIcons.updateTimeMin) || 1);
-    this.value = value;
-    data.fireIcons.updateTimeMax = value;
-    scheduleFireUpdate(false);
-    saveInBrowser(COUNTER_THEME, false);
+document.getElementById('intervalsPerUpdate').addEventListener('change', function () {
+    data.fireIcons.intervalsPerUpdate = Math.max(1, Math.round(this.value));
 })
 
 document.getElementById('headerFont').addEventListener('change', function () {
@@ -2325,8 +2275,7 @@ function fix() {
     document.getElementById('headerFont').value = data.headerFont;
     document.getElementById('mainFont').value = data.mainFont;
     document.getElementById('importFromGoogleFonts').checked = data.importFromGoogleFonts;
-    document.getElementById('fireUpdateMin').value = Math.max(1, parseFloat(data.fireIcons.updateTimeMin) || 1);
-    document.getElementById('fireUpdateMax').value = Math.max(parseFloat(data.fireIcons.updateTimeMin) || 1, parseFloat(data.fireIcons.updateTimeMax) || 1);
+    document.getElementById('intervalsPerUpdate').value = data.fireIcons.intervalsPerUpdate || 1;
     document.getElementById('gainAverageOf').value = data.gainAverageOf || 1;
     document.getElementById('counterFontWeight').value = data.counterFontWeight || "400";
     document.getElementById('counterAlignment').value = data.counterAlignment;
@@ -2822,15 +2771,10 @@ function pause() {
         data.pause = true;
         document.getElementById('pauseB').innerText = "Resume"
         clearInterval(updateInterval);
-        if (fireUpdateTimeout) {
-            clearTimeout(fireUpdateTimeout);
-            fireUpdateTimeout = null;
-        }
     } else {
         data.pause = false;
         document.getElementById('pauseB').innerText = "Pause"
         updateInterval = setInterval(update, data.updateInterval);
-        scheduleFireUpdate(false);
         update()
     }
 }
@@ -3406,8 +3350,7 @@ async function saveFireIcon() {
             'firePosition': 'above',
             'fireBorderColor': '#000',
             'fireBorderWidth': 0,
-            'updateTimeMin': 2,
-            'updateTimeMax': 2,
+            'intervalsPerUpdate': 1,
             'averageOf': 1,
             'created': []
         };
@@ -3511,9 +3454,7 @@ function loadFireIcons() {
     if (data.fireIcons.created.length == 0) {
         div.innerHTML = '<p>No fire icons created.</p>'
     }
-    document.getElementById('initialFireDelay').value = Math.max(0, parseFloat(data.fireIcons.initialFireDelay) || 0);
-    document.getElementById('fireUpdateMin').value = Math.max(1, parseFloat(data.fireIcons.updateTimeMin) || 1);
-    document.getElementById('fireUpdateMax').value = Math.max(parseFloat(data.fireIcons.updateTimeMin) || 1, parseFloat(data.fireIcons.updateTimeMax) || 1);
+    document.getElementById('initialFireDelay').value = Math.max(0, parseInt(data.fireIcons.initialFireDelay) || 0);
     document.getElementById('fireEnabled').checked = data.fireIcons.enabled || false;
     document.getElementById('fireType').value = data.fireIcons.type || 'gain';
     document.getElementById('firePosition').value = data.fireIcons.firePosition || 'above';
@@ -3792,7 +3733,6 @@ function saveDiffEdits(index) {
 document.getElementById('fireEnabled').addEventListener('click', function () {
     data.fireIcons.enabled = document.getElementById('fireEnabled').checked;
     updateFires();
-    scheduleFireUpdate(true);
 });
 
 document.getElementById('fireType').addEventListener('change', function () {
