@@ -2325,7 +2325,8 @@ function fix() {
     document.getElementById('headerFont').value = data.headerFont;
     document.getElementById('mainFont').value = data.mainFont;
     document.getElementById('importFromGoogleFonts').checked = data.importFromGoogleFonts;
-    document.getElementById('intervalsPerUpdate').value = data.fireIcons.intervalsPerUpdate || 1;
+    document.getElementById('fireUpdateMin').value = Math.max(1, parseFloat(data.fireIcons.updateTimeMin) || 1);
+    document.getElementById('fireUpdateMax').value = Math.max(parseFloat(data.fireIcons.updateTimeMin) || 1, parseFloat(data.fireIcons.updateTimeMax) || 1);
     document.getElementById('gainAverageOf').value = data.gainAverageOf || 1;
     document.getElementById('counterFontWeight').value = data.counterFontWeight || "400";
     document.getElementById('counterAlignment').value = data.counterAlignment;
@@ -3405,7 +3406,8 @@ async function saveFireIcon() {
             'firePosition': 'above',
             'fireBorderColor': '#000',
             'fireBorderWidth': 0,
-            'intervalsPerUpdate': 1,
+            'updateTimeMin': 2,
+            'updateTimeMax': 2,
             'averageOf': 1,
             'created': []
         };
