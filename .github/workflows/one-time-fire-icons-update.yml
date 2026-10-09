@@ -1,0 +1,114 @@
+name: Update fire icon scheduling
+
+on:
+  push:
+    branches: ["main"]
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Patch fire icon scheduling
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+
+          js_path = Path('top50/index.js')
+          js = js_path.read_text()
+
+          replacements = [
+              ("let fireDelayUpdatesRemaining = 0;", "let fireUpdateTimeout = null;"),
+              ("        'intervalsPerUpdate': 1,\n", "        'updateTimeMin': 2,\n        'updateTimeMax': 2,\n"),
+              ("    data.fireIcons.created.forEach(x => { if (!x.fontWeight) x.fontWeight = 900;})", "    data.fireIcons.created.forEach(x => { if (!x.fontWeight) x.fontWeight = 900;})\n\n    // Migrate the old interval-based fire timing to seconds.\n    if (data.fireIcons.updateTimeMin == null || data.fireIcons.updateTimeMax == null) {\n        const legacyIntervals = Math.max(1, parseInt(data.fireIcons.intervalsPerUpdate) || 1);\n        const updateSeconds = Math.max(1, (parseFloat(data.updateInterval) || 2000) / 1000);\n        const legacySeconds = Math.max(1, Math.round(legacyIntervals * updateSeconds));\n        data.fireIcons.updateTimeMin = legacySeconds;\n        data.fireIcons.updateTimeMax = legacySeconds;\n    }\n    delete data.fireIcons.intervalsPerUpdate;"),
+              ("    fireDelayUpdatesRemaining = Math.max(0, parseInt(data.fireIcons.initialFireDelay) || 0);\n    if (!data.pause) {", "    scheduleFireUpdate(true);\n    if (!data.pause) {"),
+              ("        const fireIntervals = Math.max(1, parseInt(data.fireIcons.intervalsPerUpdate) || 1);\n        if (data.fireIcons.enabled && data.intervalCount % fireIntervals === 0) {\n            if (fireDelayUpdatesRemaining > 0) {\n                fireDelayUpdatesRemaining--;\n                fires.clear();\n            } else {\n                calculateFires();\n            }\n        }\n", ""),
+              ("document.getElementById('intervalsPerUpdate').addEventListener('change', function () {\n    data.fireIcons.intervalsPerUpdate = Math.max(1, Math.round(this.value));\n})", "document.getElementById('fireUpdateMin').addEventListener('change', function () {\n    let value = parseFloat(this.value);\n    if (!isFinite(value) || value < 1) value = 1;\n    this.value = value;\n    data.fireIcons.updateTimeMin = value;\n    if (data.fireIcons.updateTimeMax < value) data.fireIcons.updateTimeMax = value;\n    document.getElementById('fireUpdateMax').value = data.fireIcons.updateTimeMax;\n    scheduleFireUpdate(false);\n    saveInBrowser(COUNTER_THEME, false);\n})\n\ndocument.getElementById('fireUpdateMax').addEventListener('change', function () {\n    let value = parseFloat(this.value);\n    if (!isFinite(value) || value < 1) value = 1;\n    value = Math.max(value, parseFloat(data.fireIcons.updateTimeMin) || 1);\n    this.value = value;\n    data.fireIcons.updateTimeMax = value;\n    scheduleFireUpdate(false);\n    saveInBrowser(COUNTER_THEME, false);\n})"),
+              ("    document.getElementById('initialFireDelay').value = Math.max(0, parseInt(data.fireIcons.initialFireDelay) || 0);\n    document.getElementById('fireEnabled').checked = data.fireIcons.enabled || false;", "    document.getElementById('initialFireDelay').value = Math.max(0, parseFloat(data.fireIcons.initialFireDelay) || 0);\n    document.getElementById('fireUpdateMin').value = Math.max(1, parseFloat(data.fireIcons.updateTimeMin) || 1);\n    document.getElementById('fireUpdateMax').value = Math.max(parseFloat(data.fireIcons.updateTimeMin) || 1, parseFloat(data.fireIcons.updateTimeMax) || 1);\n    document.getElementById('fireEnabled').checked = data.fireIcons.enabled || false;"),
+              ("document.getElementById('fireEnabled').addEventListener('click', function () {\n    data.fireIcons.enabled = document.getElementById('fireEnabled').checked;\n    updateFires();\n});", "document.getElementById('fireEnabled').addEventListener('click', function () {\n    data.fireIcons.enabled = document.getElementById('fireEnabled').checked;\n    updateFires();\n    scheduleFireUpdate(true);\n});"),
+              ("function pause() {\n    if (!data.pause) {\n        data.pause = true;\n        document.getElementById('pauseB').innerText = \"Resume\"\n        clearInterval(updateInterval);\n    } else {\n        data.pause = false;\n        document.getElementById('pauseB').innerText = \"Pause\"\n        updateInterval = setInterval(update, data.updateInterval);\n        update()\n    }\n}", "function pause() {\n    if (!data.pause) {\n        data.pause = true;\n        document.getElementById('pauseB').innerText = \"Resume\"\n        clearInterval(updateInterval);\n        if (fireUpdateTimeout) {\n            clearTimeout(fireUpdateTimeout);\n            fireUpdateTimeout = null;\n        }\n    } else {\n        data.pause = false;\n        document.getElementById('pauseB').innerText = \"Pause\"\n        updateInterval = setInterval(update, data.updateInterval);\n        scheduleFireUpdate(false);\n        update()\n    }\n}"),
+          ]
+
+          for old, new in replacements:
+              if old not in js:
+                  raise SystemExit(f'Missing expected JS pattern: {old[:120]!r}')
+              js = js.replace(old, new, 1)
+
+          marker = "function update(doGains = true) {"
+          scheduler = r'''function getFireUpdateDelayMs(initial = false) {
+              if (initial) {
+                  const initialDelay = Math.max(0, parseFloat(data.fireIcons.initialFireDelay) || 0);
+                  if (initialDelay > 0) return initialDelay * 1000;
+              }
+              const minSeconds = Math.max(1, parseFloat(data.fireIcons.updateTimeMin) || 1);
+              const maxSeconds = Math.max(minSeconds, parseFloat(data.fireIcons.updateTimeMax) || minSeconds);
+              const seconds = minSeconds + Math.random() * (maxSeconds - minSeconds);
+              return Math.min(seconds * 1000, 2147483647);
+          }
+
+          function scheduleFireUpdate(initial = false) {
+              if (fireUpdateTimeout) {
+                  clearTimeout(fireUpdateTimeout);
+                  fireUpdateTimeout = null;
+              }
+              if (!data || data.pause || !data.fireIcons.enabled) return;
+
+              fireUpdateTimeout = setTimeout(() => {
+                  fireUpdateTimeout = null;
+                  if (!data.pause && data.fireIcons.enabled) {
+                      try {
+                          calculateFires();
+                      } catch (err) {
+                          console.error('Fire icon update failed:', err);
+                      }
+                  }
+                  scheduleFireUpdate(false);
+              }, getFireUpdateDelayMs(initial));
+          }
+
+          '''
+          if scheduler.strip() not in js:
+              if marker not in js:
+                  raise SystemExit('Could not find update() marker')
+              js = js.replace(marker, scheduler + marker, 1)
+
+          js_path.write_text(js)
+
+          html_path = Path('top50/index.html')
+          html = html_path.read_text()
+          old_html = '''                    <label>Update fire icons every <input class="s-width" type="number" id="intervalsPerUpdate"
+                            value="1"> update interval(s)</label>'''
+          new_html = '''                    <label>Update fire icons every <input class="s-width" type="number" id="fireUpdateMin"
+                            min="1" step="0.1" value="2"> seconds</label>\n                    <label>To (optional): <input class="s-width" type="number" id="fireUpdateMax"
+                            min="1" step="0.1" value="2"> seconds</label>\n                    <p>If the two values differ, the next fire update is randomly scheduled between the minimum and maximum.</p>'''
+          if old_html not in html:
+              raise SystemExit('Could not find fire timing HTML')
+          html = html.replace(old_html, new_html, 1)
+          html = html.replace('Initial fire delay (update intervals):', 'Initial fire delay (seconds):', 1)
+          html_path.write_text(html)
+
+          print('Fire icon scheduler patch applied successfully.')
+          PY
+
+      - name: Commit patched files and remove one-time workflow
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add top50/index.js top50/index.html
+          git rm .github/workflows/one-time-fire-icons-update.yml
+          git commit -m "Make fire icon updates independent from card updates"
+          git push origin main
+
+      - name: Redeploy GitHub Pages
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run static.yml --ref main
