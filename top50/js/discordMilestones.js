@@ -49,12 +49,16 @@
         return parts.join(', ');
     }
 
-    function signedPercent(change, previousMilestone) {
-        if (!Number.isFinite(change) || !Number.isFinite(previousMilestone) || previousMilestone <= 0) return '';
-        const percent = (change / previousMilestone) * 100;
-        const sign = percent > 0 ? '+' : '';
-        const direction = percent > 0 ? 'increase' : 'decrease';
-        return `${sign}${fmt2(percent)}% ${direction}`;
+    function averageLines(change, durationMs) {
+        if (!Number.isFinite(change) || change === 0 || !Number.isFinite(durationMs) || durationMs <= 0) return '';
+        const perDay = change / (durationMs / 86400000);
+        const perHour = change / (durationMs / 3600000);
+        const perMinute = change / (durationMs / 60000);
+        return [
+            `${fmt2(perDay)} subscribers per day`,
+            `${fmt2(perHour)} subscribers per hour`,
+            `${fmt2(perMinute)} subscribers per minute`
+        ].join('\n');
     }
 
     async function send(payload) {
@@ -74,7 +78,7 @@
         const previousMilestone = previousState ? previousState.milestone : null;
         const duration = previousState ? now.getTime() - previousState.at : 0;
         const change = Number.isFinite(previousMilestone) ? milestone - previousMilestone : 0;
-        const percentage = signedPercent(change, previousMilestone);
+        const averages = averageLines(change, duration);
         const decreasing = change < 0;
         const channelUrl = channel.url || channel.link || channel.channelUrl || '';
         const action = decreasing ? 'dropped below' : 'just hit';
@@ -102,7 +106,7 @@
                         inline: false
                     },
                     ...(previousState ? [{ name: '⏱️ Duration', value: durationParts(duration), inline: false }] : []),
-                    ...(percentage ? [{ name: '📊 Percentage Change', value: `**${percentage}**`, inline: false }] : []),
+                    ...(averages ? [{ name: '📈 Subscriber Averages', value: averages, inline: false }] : []),
                     {
                         name: 'ℹ️ Information',
                         value: `With this subscriber update, **${name}** is currently at **#${rank}** in the Livecountsedit Top 50.`,
@@ -211,7 +215,7 @@
                             { name: '⏪ Previous milestone', value: '19,900,000 subscribers', inline: false },
                             { name: '⏩ New milestone', value: '**20,000,000 subscribers**', inline: false },
                             { name: '⏱️ Duration', value: '17 hours, 35 minutes, 40 seconds', inline: false },
-                            { name: '📊 Percentage Change', value: '**+0.50% increase**', inline: false },
+                            { name: '📈 Subscriber Averages', value: '136,406.15 subscribers per day\n5,683.59 subscribers per hour\n94.73 subscribers per minute', inline: false },
                             { name: 'ℹ️ Information', value: 'With this subscriber update, **Example Channel** is currently at **#1** in the Livecountsedit Top 50.', inline: false }
                         ],
                         footer: { text: 'Update powered by Livecountsedit • Today at 07:36' },
