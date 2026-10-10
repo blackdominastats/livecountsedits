@@ -131,7 +131,7 @@
                     ...(averages ? [{ name: '📈 Subscriber Averages', value: averages, inline: false }] : []),
                     {
                         name: 'ℹ️ Information',
-                        value: `With this subscriber update, **${name}** is currently at **#${rank}** in the Livecountsedit Top 50.`,
+                        value: `With this subscriber update, **${name}** is currently at **#${rank}** in the Livecountsedit rankings.`,
                         inline: false
                     }
                 ],
@@ -145,7 +145,9 @@
         if (!cfg.enabled || !validWebhook(cfg.webhook)) return;
         if (typeof data === 'undefined' || !data || !Array.isArray(data.data)) return;
 
-        const channels = data.data.slice(0, 50);
+        // Monitor every channel in the live data, not just the displayed Top 50.
+        // The index is retained as the channel's current rank in the full dataset.
+        const channels = data.data;
         for (let i = 0; i < channels.length; i++) {
             const c = channels[i];
             if (!c) continue;
@@ -204,7 +206,7 @@
 
         const panel = document.createElement('div');
         panel.id = 'dm-panel';
-        panel.innerHTML = `<h3>Discord Milestone Notifications</h3><p class="dm-note">Alerts automatically when a channel in the displayed Top 50 crosses a milestone in either direction. The webhook is stored only in this browser, not in GitHub.</p><div class="dm-tiers"><b>Automatic tiers:</b><br>&lt;1K → every 1<br>1K–&lt;10K → every 10<br>10K–&lt;100K → every 100<br>100K–&lt;1M → every 1K<br>1M–&lt;10M → every 10K<br>10M–&lt;100M → every 100K<br>100M–&lt;1B → every 1M</div><label><input id="dm-enabled" type="checkbox" style="width:auto"> Enable notifications</label><label>Discord webhook URL</label><input id="dm-webhook" type="password" placeholder="https://discord.com/api/webhooks/..." autocomplete="off"><label>Optional mention</label><input id="dm-mention" type="text" placeholder="e.g. &lt;@&amp;123456789&gt;"><div class="dm-row"><button id="dm-save">Save</button><button id="dm-test">Send test</button><button id="dm-close">Close</button></div><div id="dm-status"></div>`;
+        panel.innerHTML = `<h3>Discord Milestone Notifications</h3><p class="dm-note">Alerts automatically when any channel in the live data crosses a milestone in either direction. The webhook is stored only in this browser, not in GitHub.</p><div class="dm-tiers"><b>Automatic tiers:</b><br>&lt;1K → every 1<br>1K–&lt;10K → every 10<br>10K–&lt;100K → every 100<br>100K–&lt;1M → every 1K<br>1M–&lt;10M → every 10K<br>10M–&lt;100M → every 100K<br>100M–&lt;1B → every 1M</div><label><input id="dm-enabled" type="checkbox" style="width:auto"> Enable notifications</label><label>Discord webhook URL</label><input id="dm-webhook" type="password" placeholder="https://discord.com/api/webhooks/..." autocomplete="off"><label>Optional mention</label><input id="dm-mention" type="text" placeholder="e.g. &lt;@&amp;123456789&gt;"><div class="dm-row"><button id="dm-save">Save</button><button id="dm-test">Send test</button><button id="dm-close">Close</button></div><div id="dm-status"></div>`;
         document.body.appendChild(panel);
 
         const enabled = panel.querySelector('#dm-enabled');
@@ -241,7 +243,7 @@
                             { name: '⏩ New milestone', value: '**20,000,000 subscribers**', inline: false },
                             { name: '⏱️ Duration', value: '17 hours, 35 minutes, 40 seconds', inline: false },
                             { name: '📈 Subscriber Averages', value: '136,406.15 subscribers per day\n5,683.59 subscribers per hour\n94.73 subscribers per minute', inline: false },
-                            { name: 'ℹ️ Information', value: 'With this subscriber update, **Example Channel** is currently at **#1** in the Livecountsedit Top 50.', inline: false }
+                            { name: 'ℹ️ Information', value: 'With this subscriber update, **Example Channel** is currently at **#1** in the Livecountsedit rankings.', inline: false }
                         ],
                         footer: { text: 'Update powered by Livecountsedit' },
                         timestamp: new Date().toISOString()
