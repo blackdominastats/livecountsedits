@@ -53,22 +53,29 @@
     }
 
     function alertPayload(channel, milestone, rank) {
+        const now = new Date();
+        const time = now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+        const name = channel.name || 'Unknown channel';
+        const subscribers = fmt(channel.count);
+        const milestoneText = fmt(milestone);
+        const step = fmt(milestoneStep(Number(channel.count)));
+
         return {
             username: 'Livecountsedit',
             content: cfg.mention || undefined,
             embeds: [{
-                title: '🏆 Top 50 Milestone Reached',
-                description: `**${channel.name || 'Unknown channel'}** just reached **${fmt(milestone)} subscribers**.`,
-                color: 0x5865F2,
+                title: '📺 YouTube Subscriber Milestone',
+                description: `**${name}** just hit **${milestoneText} subscribers**`,
+                color: 0x00C853,
                 thumbnail: channel.image ? { url: channel.image } : undefined,
                 fields: [
-                    { name: 'Subscribers', value: fmt(channel.count), inline: true },
-                    { name: 'Rank', value: `#${rank}`, inline: true },
-                    { name: 'Milestone', value: fmt(milestone), inline: true },
-                    { name: 'Milestone Step', value: fmt(milestoneStep(Number(channel.count))), inline: true }
+                    { name: '🏆 Milestone', value: `**${milestoneText} subscribers**`, inline: false },
+                    { name: '📊 Current Subscribers', value: `${subscribers} subscribers`, inline: true },
+                    { name: '🏅 Top 50 Rank', value: `#${rank}`, inline: true },
+                    { name: '⚡ Automatic Tier', value: `Every ${step} subscribers`, inline: true }
                 ],
-                footer: { text: 'Livecountsedit • Discord milestone alert' },
-                timestamp: new Date().toISOString()
+                footer: { text: `Update powered by Livecountsedit • Today at ${time}` },
+                timestamp: now.toISOString()
             }]
         };
     }
@@ -147,7 +154,7 @@
             const old = cfg;
             cfg = { ...cfg, enabled: true, webhook: url, mention: mention.value.trim() };
             try {
-                await send({ username: 'Livecountsedit', content: cfg.mention || undefined, embeds: [{ title: '🔔 Discord Milestone Test', description: 'Your Livecountsedit Top 50 milestone notifications are connected.', color: 0x5865F2, footer: { text: 'Livecountsedit • Discord milestone alert' }, timestamp: new Date().toISOString() }] });
+                await send({ username: 'Livecountsedit', content: cfg.mention || undefined, embeds: [{ title: '📺 YouTube Subscriber Milestone', description: '**Example Channel** just hit **1,000,000 subscribers**', color: 0x00C853, fields: [{ name: '🏆 Milestone', value: '**1,000,000 subscribers**', inline: false }, { name: '📊 Current Subscribers', value: '1,000,000 subscribers', inline: true }, { name: '🏅 Top 50 Rank', value: '#1', inline: true }, { name: '⚡ Automatic Tier', value: 'Every 10,000 subscribers', inline: true }], footer: { text: 'Update powered by Livecountsedit • Discord milestone alert' }, timestamp: new Date().toISOString() }] });
                 status.textContent = 'Test sent successfully.';
             } catch (err) { status.textContent = `Test failed: ${err.message}`; }
             cfg = old;
