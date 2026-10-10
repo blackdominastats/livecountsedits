@@ -10,6 +10,7 @@
     try { cfg = { ...defaults, ...JSON.parse(localStorage.getItem(KEY) || '{}') }; } catch (_) {}
 
     const fmt = n => Math.round(Number(n) || 0).toLocaleString('en-US');
+    const fmt2 = n => Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     const validWebhook = url => {
         try {
             const u = new URL(url);
@@ -18,7 +19,6 @@
     };
     const save = () => localStorage.setItem(KEY, JSON.stringify(cfg));
 
-    // Automatic milestone tiers.
     function milestoneStep(count) {
         if (count < 1_000) return 1;
         if (count < 10_000) return 10;
@@ -54,9 +54,9 @@
         const perHour = gained / (durationMs / 3600000);
         const perMinute = gained / (durationMs / 60000);
         return [
-            `${fmt(perDay)} subscribers per day`,
-            `${fmt(perHour)} subscribers per hour`,
-            `${fmt(perMinute)} subscribers per minute`
+            `${fmt2(perDay)} subscribers per day`,
+            `${fmt2(perHour)} subscribers per hour`,
+            `${fmt2(perMinute)} subscribers per minute`
         ].join('\n');
     }
 
@@ -74,41 +74,42 @@
         const now = new Date();
         const time = now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
         const name = channel.name || 'Unknown channel';
-        const count = Number(channel.count);
         const previousMilestone = previousState ? previousState.milestone : null;
         const duration = previousState ? now.getTime() - previousState.at : 0;
         const gained = previousMilestone == null ? 0 : milestone - previousMilestone;
         const averages = averageLines(gained, duration);
         const channelUrl = channel.url || channel.link || channel.channelUrl || '';
-        const title = channelUrl ? `[${name}](${channelUrl})` : `**${name}**`;
-        const embed = {
-            author: {
-                name: 'YouTube Subscriber Update',
-                icon_url: 'https://cdn.simpleicons.org/youtube/FF0000'
-            },
-            title: `${name} just hit ${fmt(milestone)} subscribers`,
-            url: channelUrl || undefined,
-            color: 0x00C853,
-            thumbnail: channel.image ? { url: channel.image } : undefined,
-            fields: [
-                ...(previousMilestone != null ? [{ name: '⏪ Previous milestone', value: `${fmt(previousMilestone)} subscribers`, inline: false }] : []),
-                { name: '⏩ New milestone', value: `**${fmt(milestone)} subscribers**`, inline: false },
-                ...(previousMilestone != null ? [{ name: '⏱️ Duration', value: durationParts(duration), inline: false }] : []),
-                ...(averages ? [{ name: '📈 Subscriber Averages', value: averages, inline: false }] : []),
-                {
-                    name: 'ℹ️ Information',
-                    value: `With this subscriber update, **${name}** has reached **#${rank}** in the Livecountsedit Top 50.`,
-                    inline: false
-                }
-            ],
-            footer: { text: `Update powered by Livecountsedit • Today at ${time}` },
-            timestamp: now.toISOString()
-        };
+        const description = channelUrl
+            ? `[${name}](${channelUrl}) just hit **${fmt(milestone)} subscribers**`
+            : `**${name}** just hit **${fmt(milestone)} subscribers**`;
 
         return {
             username: 'Livecountsedit',
+            avatar_url: channel.botAvatar || undefined,
             content: cfg.mention || undefined,
-            embeds: [embed]
+            embeds: [{
+                author: {
+                    name: 'YouTube Subscriber Update',
+                    icon_url: 'https://cdn.simpleicons.org/youtube/FF0000'
+                },
+                description,
+                url: channelUrl || undefined,
+                color: 0x00C853,
+                thumbnail: channel.image ? { url: channel.image } : undefined,
+                fields: [
+                    ...(previousMilestone != null ? [{ name: '⏪ Previous milestone', value: `${fmt(previousMilestone)} subscribers`, inline: false }] : []),
+                    { name: '⏩ New milestone', value: `**${fmt(milestone)} subscribers**`, inline: false },
+                    ...(previousMilestone != null ? [{ name: '⏱️ Duration', value: durationParts(duration), inline: false }] : []),
+                    ...(averages ? [{ name: '📈 Subscriber Averages', value: averages, inline: false }] : []),
+                    {
+                        name: 'ℹ️ Information',
+                        value: `With this subscriber update, **${name}** has reached **#${rank}** in the Livecountsedit Top 50.`,
+                        inline: false
+                    }
+                ],
+                footer: { text: `Update powered by Livecountsedit • Today at ${time}` },
+                timestamp: now.toISOString()
+            }]
         };
     }
 
@@ -128,7 +129,6 @@
             const previous = notified.get(id);
             const now = Date.now();
 
-            // Establish the current milestone without sending a startup notification.
             if (previous == null) {
                 notified.set(id, { milestone, at: now });
                 continue;
@@ -192,8 +192,9 @@
                     content: cfg.mention || undefined,
                     embeds: [{
                         author: { name: 'YouTube Subscriber Update', icon_url: 'https://cdn.simpleicons.org/youtube/FF0000' },
-                        title: 'Example Channel just hit 44,200,000 subscribers',
+                        description: '**Example Channel** just hit **44,200,000 subscribers**',
                         color: 0x00C853,
+                        thumbnail: { url: 'https://cdn.simpleicons.org/youtube/FF0000' },
                         fields: [
                             { name: '⏪ Previous milestone', value: '44,100,000 subscribers', inline: false },
                             { name: '⏩ New milestone', value: '**44,200,000 subscribers**', inline: false },
