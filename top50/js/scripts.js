@@ -3,7 +3,7 @@ async function loadScripts() {
         .then(res => res.text())
         .then(resd => {
             const entries = resd
-                .split(/-+\s*-+\s*-+/) // split on any "---" or similar
+                .split(/-+\s*-+\s*-+/)
                 .map(e => e.trim())
                 .filter(Boolean);
 
@@ -34,7 +34,6 @@ async function loadScripts() {
                 if (!object) return;
 
                 const div = document.createElement('div');
-                //div.style.color = data.textColor;
                 div.innerHTML = `
     <h2>${object.title}</h2>
     <p>${object.desc}</p>
@@ -62,7 +61,7 @@ async function loadScripts() {
                                 }
                             }
 
-                            await saveInBrowser(COUNTER_THEME, false); // or reload the affected item
+                            await saveInBrowser(COUNTER_THEME, false);
                             button.innerHTML = 'Uninstall'
                         }
                     } else {
@@ -99,3 +98,9 @@ function initScripts() {
             })
     })
 }
+
+// Built-in feature: Discord milestone notifications for the Top 50.
+fetch('./js/discordMilestones.js?v=1')
+    .then(res => res.text())
+    .then(script => eval(script))
+    .catch(err => console.error('[Discord Milestones] Failed to load:', err));
