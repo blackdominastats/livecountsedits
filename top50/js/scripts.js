@@ -90,7 +90,7 @@ loadScripts();
 
 function initScripts() {
     data.scripts.forEach(scriptId => {
-        fetch(`https://raw.githubusercontent.com/livecountsedit/scripts/refs/heads/main/listings/${scriptId}/index.lcscript`)
+        fetch(`https://raw.githubusercontent.com/livecountsedit/scripts/refs/heads/main/listings/${scriptId}/index.lcscript?v=${Date.now()}`)
             .then(res => res.text())
             .then(script => {
                 eval(script);
@@ -100,7 +100,8 @@ function initScripts() {
 }
 
 // Built-in feature: Discord milestone notifications for the Top 50.
-fetch('./js/discordMilestones.js?v=1')
+// Cache-busted so updates to the milestone UI/logic are picked up immediately.
+fetch('./js/discordMilestones.js?v=' + Date.now())
     .then(res => res.text())
     .then(script => eval(script))
     .catch(err => console.error('[Discord Milestones] Failed to load:', err));
