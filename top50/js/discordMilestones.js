@@ -36,7 +36,8 @@
                 notified.set(key, {
                     count: Number(value.count) || 0,
                     milestone: Number(value.milestone),
-                    at: Number(value.at)
+                    at: Number(value.at),
+                    lastDuration: Number.isFinite(Number(value.lastDuration)) ? Number(value.lastDuration) : null
                 });
             }
         });
@@ -101,6 +102,19 @@
         const change = Number.isFinite(previousMilestone) ? milestone - previousMilestone : 0;
         const averages = averageLines(change, duration);
         const decreasing = change < 0;
+        const fasterThanPrevious = Number.isFinite(previousState?.lastDuration) && duration < previousState.lastDuration;
+
+        let color;
+        if (decreasing) {
+            color = Number.isFinite(previousState?.lastDuration)
+                ? (fasterThanPrevious ? 0x8B0000 : 0xFF8A8A)
+                : 0xFF8A8A;
+        } else {
+            color = Number.isFinite(previousState?.lastDuration)
+                ? (fasterThanPrevious ? 0x90EE90 : 0x006400)
+                : 0x90EE90;
+        }
+
         const channelUrl = channel.url || channel.link || channel.channelUrl || '';
         const action = decreasing ? 'dropped below' : 'just hit';
         const actionAmount = decreasing && Number.isFinite(previousMilestone) ? previousMilestone : milestone;
@@ -118,7 +132,7 @@
                 },
                 description,
                 url: channelUrl || undefined,
-                color: decreasing ? 0xE53935 : 0x00C853,
+                color,
                 thumbnail: channel.image ? { url: channel.image } : undefined,
                 fields: [
                     ...(previousMilestone != null ? [{ name: '⏪ Previous milestone', value: `${fmt(previousMilestone)} subscribers`, inline: false }] : []),
@@ -160,7 +174,7 @@
             const now = Date.now();
 
             if (previous == null) {
-                notified.set(id, { count, milestone, at: now });
+                notified.set(id, { count, milestone, at: now, lastDuration: null });
                 saveState();
                 continue;
             }
@@ -170,8 +184,9 @@
             if (crossed && !inFlight.has(id)) {
                 inFlight.add(id);
                 try {
+                    const duration = now - previous.at;
                     await send(alertPayload(c, milestone, i + 1, previous));
-                    notified.set(id, { count, milestone, at: now });
+                    notified.set(id, { count, milestone, at: now, lastDuration: duration });
                     saveState();
                 } catch (err) {
                     console.error('[Discord Milestones] Failed to send milestone:', err);
@@ -236,7 +251,7 @@
                     embeds: [{
                         author: { name: 'YouTube Subscriber Update', icon_url: 'https://cdn.simpleicons.org/youtube/FF0000' },
                         description: '**Example Channel** just hit **20,000,000 subscribers**',
-                        color: 0x00C853,
+                        color: 0x90EE90,
                         thumbnail: { url: 'https://cdn.simpleicons.org/youtube/FF0000' },
                         fields: [
                             { name: '⏪ Previous milestone', value: '19,900,000 subscribers', inline: false },
