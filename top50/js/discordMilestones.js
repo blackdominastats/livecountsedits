@@ -35,14 +35,6 @@
         return Math.floor(count / step) * step;
     }
 
-    // Returns the next milestone strictly above the last observed subscriber count.
-    // This lets us detect a milestone even when the live counter jumps over it.
-    function nextMilestoneAfter(count) {
-        const step = milestoneStep(count);
-        if (count < 1_000) return count + 1;
-        return (Math.floor(count / step) + 1) * step;
-    }
-
     function durationParts(ms) {
         const total = Math.max(0, Math.floor(ms / 1000));
         const days = Math.floor(total / 86400);
@@ -57,16 +49,24 @@
         return parts.join(', ');
     }
 
-    function averageLines(gained, durationMs) {
-        if (!Number.isFinite(gained) || gained <= 0 || !Number.isFinite(durationMs) || durationMs <= 0) return '';
-        const perDay = gained / (durationMs / 86400000);
-        const perHour = gained / (durationMs / 3600000);
-        const perMinute = gained / (durationMs / 60000);
+    function averageLines(change, durationMs) {
+        if (!Number.isFinite(change) || change === 0 || !Number.isFinite(durationMs) || durationMs <= 0) return '';
+        const perDay = change / (durationMs / 86400000);
+        const perHour = change / (durationMs / 3600000);
+        const perMinute = change / (durationMs / 60000);
         return [
             `${fmt2(perDay)} subscribers per day`,
             `${fmt2(perHour)} subscribers per hour`,
             `${fmt2(perMinute)} subscribers per minute`
         ].join('\n');
+    }
+
+    function signedPercent(change, previousMilestone) {
+        if (!Number.isFinite(change) || !Number.isFinite(previousMilestone) || previousMilestone <= 0) return '';
+        const percent = (change / previousMilestone) * 100;
+        const sign = percent > 0 ? '+' : '';
+        const direction = percent > 0 ? 'increase' : 'decrease';
+        return `${sign}${fmt2(percent)}% ${direction}`;
     }
 
     async function send(payload) {
@@ -85,35 +85,42 @@
         const name = channel.name || 'Unknown channel';
         const previousMilestone = previousState ? previousState.milestone : null;
         const duration = previousState ? now.getTime() - previousState.at : 0;
-        const gained = previousState && Number.isFinite(previousState.count)
-            ? milestone - previousState.count
-            : previousMilestone == null ? 0 : milestone - previousMilestone;
-        const averages = averageLines(gained, duration);
+        const change = previousMilestone == null ? 0 : milestone - previousMilestone;
+        const increasing = change > 0;
+        const decreasing = change < 0;
+        const averages = averageLines(change, duration);
+        const percentage = signedPercent(change, previousMilestone);
         const channelUrl = channel.url || channel.link || channel.channelUrl || '';
+        const action = decreasing ? 'dropped below' : 'just hit';
         const description = channelUrl
-            ? `[${name}](${channelUrl}) just hit **${fmt(milestone)} subscribers**`
-            : `**${name}** just hit **${fmt(milestone)} subscribers**`;
+            ? `[${name}](${channelUrl}) ${action} **${fmt(milestone)} subscribers**`
+            : `**${name}** ${action} **${fmt(milestone)} subscribers**`;
 
         return {
             username: 'Livecountsedit',
             content: cfg.mention || undefined,
             embeds: [{
                 author: {
-                    name: 'YouTube Subscriber Update',
+                    name: decreasing ? 'YouTube Subscriber Milestone Lost' : 'YouTube Subscriber Update',
                     icon_url: 'https://cdn.simpleicons.org/youtube/FF0000'
                 },
                 description,
                 url: channelUrl || undefined,
-                color: 0x00C853,
+                color: decreasing ? 0xE53935 : 0x00C853,
                 thumbnail: channel.image ? { url: channel.image } : undefined,
                 fields: [
                     ...(previousMilestone != null ? [{ name: '⏪ Previous milestone', value: `${fmt(previousMilestone)} subscribers`, inline: false }] : []),
-                    { name: '⏩ New milestone', value: `**${fmt(milestone)} subscribers**`, inline: false },
+                    {
+                        name: decreasing ? '⏬ Lost milestone' : '⏩ New milestone',
+                        value: `**${fmt(milestone)} subscribers**`,
+                        inline: false
+                    },
                     ...(previousMilestone != null ? [{ name: '⏱️ Duration', value: durationParts(duration), inline: false }] : []),
                     ...(averages ? [{ name: '📈 Subscriber Averages', value: averages, inline: false }] : []),
+                    ...(percentage ? [{ name: '📊 Percentage Change', value: `**${percentage}**`, inline: false }] : []),
                     {
                         name: 'ℹ️ Information',
-                        value: `With this subscriber update, **${name}** has reached **#${rank}** in the Livecountsedit Top 50.`,
+                        value: `With this subscriber update, **${name}** is currently at **#${rank}** in the Livecountsedit Top 50.`,
                         inline: false
                     }
                 ],
@@ -135,7 +142,6 @@
             if (!Number.isFinite(count) || count < 0) continue;
 
             // IDs are optional in Livecountsedit's Add Channel settings.
-            // Use the channel name as a stable fallback so rank changes do not reset it.
             const id = String(c.id || `name:${c.name || 'unknown'}`);
             const milestone = milestoneFor(count);
             const previous = notified.get(id);
@@ -147,27 +153,22 @@
                 continue;
             }
 
-            // Subscriber counts can jump between polls. Check whether the live count
-            // has crossed the NEXT milestone rather than requiring an exact count.
-            const next = nextMilestoneAfter(previous.count);
-            const crossed = count >= next && count > previous.count;
+            // Compare the milestone bucket itself. This detects both upward and downward
+            // crossings, including jumps that skip over several milestone values.
+            const crossed = milestone !== previous.milestone;
 
             if (crossed && !inFlight.has(id)) {
-                // If the count jumped across several milestones, notify for the highest
-                // milestone reached by this update rather than requiring an exact hit.
-                const crossedMilestone = milestone > previous.milestone ? milestone : next;
                 inFlight.add(id);
                 try {
-                    await send(alertPayload(c, crossedMilestone, i + 1, previous));
-                    notified.set(id, { count, milestone: crossedMilestone, at: now });
+                    await send(alertPayload(c, milestone, i + 1, previous));
+                    notified.set(id, { count, milestone, at: now });
                 } catch (err) {
                     console.error('[Discord Milestones] Failed to send milestone:', err);
                 } finally {
                     inFlight.delete(id);
                 }
-            } else if (count !== previous.count) {
+            } else if (count !== previous.count && !inFlight.has(id)) {
                 // Keep the actual subscriber count current even when no milestone was crossed.
-                // This is important when counts move up/down between polling cycles.
                 notified.set(id, { ...previous, count });
             }
         }
@@ -194,7 +195,7 @@
 
         const panel = document.createElement('div');
         panel.id = 'dm-panel';
-        panel.innerHTML = `<h3>Discord Milestone Notifications</h3><p class="dm-note">Alerts automatically when a channel in the displayed Top 50 crosses a milestone. The webhook is stored only in this browser, not in GitHub.</p><div class="dm-tiers"><b>Automatic tiers:</b><br>&lt;1K → every 1<br>1K–&lt;10K → every 10<br>10K–&lt;100K → every 100<br>100K–&lt;1M → every 1K<br>1M–&lt;10M → every 10K<br>10M–&lt;100M → every 100K<br>100M–&lt;1B → every 1M</div><label><input id="dm-enabled" type="checkbox" style="width:auto"> Enable notifications</label><label>Discord webhook URL</label><input id="dm-webhook" type="password" placeholder="https://discord.com/api/webhooks/..." autocomplete="off"><label>Optional mention</label><input id="dm-mention" type="text" placeholder="e.g. &lt;@&amp;123456789&gt;"><div class="dm-row"><button id="dm-save">Save</button><button id="dm-test">Send test</button><button id="dm-close">Close</button></div><div id="dm-status"></div>`;
+        panel.innerHTML = `<h3>Discord Milestone Notifications</h3><p class="dm-note">Alerts automatically when a channel in the displayed Top 50 crosses a milestone in either direction. The webhook is stored only in this browser, not in GitHub.</p><div class="dm-tiers"><b>Automatic tiers:</b><br>&lt;1K → every 1<br>1K–&lt;10K → every 10<br>10K–&lt;100K → every 100<br>100K–&lt;1M → every 1K<br>1M–&lt;10M → every 10K<br>10M–&lt;100M → every 100K<br>100M–&lt;1B → every 1M</div><label><input id="dm-enabled" type="checkbox" style="width:auto"> Enable notifications</label><label>Discord webhook URL</label><input id="dm-webhook" type="password" placeholder="https://discord.com/api/webhooks/..." autocomplete="off"><label>Optional mention</label><input id="dm-mention" type="text" placeholder="e.g. &lt;@&amp;123456789&gt;"><div class="dm-row"><button id="dm-save">Save</button><button id="dm-test">Send test</button><button id="dm-close">Close</button></div><div id="dm-status"></div>`;
         document.body.appendChild(panel);
 
         const enabled = panel.querySelector('#dm-enabled');
@@ -231,7 +232,8 @@
                             { name: '⏩ New milestone', value: '**44,200,000 subscribers**', inline: false },
                             { name: '⏱️ Duration', value: '17 hours, 35 minutes, 40 seconds', inline: false },
                             { name: '📈 Subscriber Averages', value: '136,406.15 subscribers per day\n5,683.59 subscribers per hour\n94.73 subscribers per minute', inline: false },
-                            { name: 'ℹ️ Information', value: 'With this subscriber update, **Example Channel** has reached **#1** in the Livecountsedit Top 50.', inline: false }
+                            { name: '📊 Percentage Change', value: '**+0.23% increase**', inline: false },
+                            { name: 'ℹ️ Information', value: 'With this subscriber update, **Example Channel** is currently at **#1** in the Livecountsedit Top 50.', inline: false }
                         ],
                         footer: { text: 'Update powered by Livecountsedit • Today at 07:36' },
                         timestamp: new Date().toISOString()
