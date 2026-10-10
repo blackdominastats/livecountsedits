@@ -2,6 +2,7 @@
     'use strict';
 
     const KEY = 'lcedit_discord_milestones_v2';
+    const STATE_KEY = 'lcedit_discord_milestone_state_v1';
     const defaults = { enabled: false, webhook: '', mention: '' };
     let cfg = { ...defaults };
     const notified = new Map();
@@ -19,6 +20,27 @@
         } catch (_) { return false; }
     };
     const save = () => localStorage.setItem(KEY, JSON.stringify(cfg));
+
+    function saveState() {
+        try {
+            const state = {};
+            notified.forEach((value, key) => { state[key] = value; });
+            localStorage.setItem(STATE_KEY, JSON.stringify(state));
+        } catch (_) {}
+    }
+
+    try {
+        const savedState = JSON.parse(localStorage.getItem(STATE_KEY) || '{}');
+        Object.entries(savedState).forEach(([key, value]) => {
+            if (value && Number.isFinite(Number(value.milestone)) && Number.isFinite(Number(value.at))) {
+                notified.set(key, {
+                    count: Number(value.count) || 0,
+                    milestone: Number(value.milestone),
+                    at: Number(value.at)
+                });
+            }
+        });
+    } catch (_) {}
 
     function milestoneStep(count) {
         if (count < 1_000) return 1;
@@ -137,6 +159,7 @@
 
             if (previous == null) {
                 notified.set(id, { count, milestone, at: now });
+                saveState();
                 continue;
             }
 
@@ -147,6 +170,7 @@
                 try {
                     await send(alertPayload(c, milestone, i + 1, previous));
                     notified.set(id, { count, milestone, at: now });
+                    saveState();
                 } catch (err) {
                     console.error('[Discord Milestones] Failed to send milestone:', err);
                 } finally {
@@ -154,6 +178,7 @@
                 }
             } else if (count !== previous.count && !inFlight.has(id)) {
                 notified.set(id, { ...previous, count });
+                saveState();
             }
         }
     }
@@ -232,5 +257,8 @@
     const timer = setInterval(() => {
         try { ui(); check(); } catch (err) { console.error('[Discord Milestones]', err); }
     }, 1000);
-    window.addEventListener('beforeunload', () => clearInterval(timer), { once: true });
+    window.addEventListener('beforeunload', () => {
+        try { saveState(); } catch (_) {}
+        clearInterval(timer);
+    }, { once: true });
 })();
