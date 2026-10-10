@@ -82,9 +82,10 @@
         const decreasing = change < 0;
         const channelUrl = channel.url || channel.link || channel.channelUrl || '';
         const action = decreasing ? 'dropped below' : 'just hit';
+        const actionAmount = decreasing && Number.isFinite(previousMilestone) ? previousMilestone : milestone;
         const description = channelUrl
-            ? `[${name}](${channelUrl}) ${action} **${fmt(milestone)} subscribers**`
-            : `**${name}** ${action} **${fmt(milestone)} subscribers**`;
+            ? `[${name}](${channelUrl}) ${action} **${fmt(actionAmount)} subscribers**`
+            : `**${name}** ${action} **${fmt(actionAmount)} subscribers**`;
 
         return {
             username: 'Livecountsedit',
