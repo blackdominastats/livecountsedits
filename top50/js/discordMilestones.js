@@ -18,15 +18,7 @@
     };
     const save = () => localStorage.setItem(KEY, JSON.stringify(cfg));
 
-    // Automatic milestone tiers:
-    // <1K: every 1
-    // 1K-<10K: every 10
-    // 10K-<100K: every 100
-    // 100K-<1M: every 1K
-    // 1M-<10M: every 10K
-    // 10M-<100M: every 100K
-    // 100M-<1B: every 1M
-    // 1B+: continue at every 1M until another tier is defined.
+    // Automatic milestone tiers.
     function milestoneStep(count) {
         if (count < 1_000) return 1;
         if (count < 10_000) return 10;
@@ -42,6 +34,32 @@
         return Math.floor(count / step) * step;
     }
 
+    function durationParts(ms) {
+        const total = Math.max(0, Math.floor(ms / 1000));
+        const days = Math.floor(total / 86400);
+        const hours = Math.floor((total % 86400) / 3600);
+        const minutes = Math.floor((total % 3600) / 60);
+        const seconds = total % 60;
+        const parts = [];
+        if (days) parts.push(`${days} day${days === 1 ? '' : 's'}`);
+        if (hours) parts.push(`${hours} hour${hours === 1 ? '' : 's'}`);
+        if (minutes) parts.push(`${minutes} minute${minutes === 1 ? '' : 's'}`);
+        if (!parts.length || seconds) parts.push(`${seconds} second${seconds === 1 ? '' : 's'}`);
+        return parts.join(', ');
+    }
+
+    function averageLines(gained, durationMs) {
+        if (!Number.isFinite(gained) || gained <= 0 || !Number.isFinite(durationMs) || durationMs <= 0) return '';
+        const perDay = gained / (durationMs / 86400000);
+        const perHour = gained / (durationMs / 3600000);
+        const perMinute = gained / (durationMs / 60000);
+        return [
+            `${fmt(perDay)} subscribers per day`,
+            `${fmt(perHour)} subscribers per hour`,
+            `${fmt(perMinute)} subscribers per minute`
+        ].join('\n');
+    }
+
     async function send(payload) {
         if (!validWebhook(cfg.webhook)) return;
         const r = await fetch(cfg.webhook, {
@@ -52,31 +70,45 @@
         if (!r.ok) throw new Error(`Discord returned HTTP ${r.status}`);
     }
 
-    function alertPayload(channel, milestone, rank) {
+    function alertPayload(channel, milestone, rank, previousState) {
         const now = new Date();
         const time = now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
         const name = channel.name || 'Unknown channel';
-        const subscribers = fmt(channel.count);
-        const milestoneText = fmt(milestone);
-        const step = fmt(milestoneStep(Number(channel.count)));
+        const count = Number(channel.count);
+        const previousMilestone = previousState ? previousState.milestone : null;
+        const duration = previousState ? now.getTime() - previousState.at : 0;
+        const gained = previousMilestone == null ? 0 : milestone - previousMilestone;
+        const averages = averageLines(gained, duration);
+        const channelUrl = channel.url || channel.link || channel.channelUrl || '';
+        const title = channelUrl ? `[${name}](${channelUrl})` : `**${name}**`;
+        const embed = {
+            author: {
+                name: 'YouTube Subscriber Update',
+                icon_url: 'https://cdn.simpleicons.org/youtube/FF0000'
+            },
+            title: `${name} just hit ${fmt(milestone)} subscribers`,
+            url: channelUrl || undefined,
+            color: 0x00C853,
+            thumbnail: channel.image ? { url: channel.image } : undefined,
+            fields: [
+                ...(previousMilestone != null ? [{ name: '⏪ Previous milestone', value: `${fmt(previousMilestone)} subscribers`, inline: false }] : []),
+                { name: '⏩ New milestone', value: `**${fmt(milestone)} subscribers**`, inline: false },
+                ...(previousMilestone != null ? [{ name: '⏱️ Duration', value: durationParts(duration), inline: false }] : []),
+                ...(averages ? [{ name: '📈 Subscriber Averages', value: averages, inline: false }] : []),
+                {
+                    name: 'ℹ️ Information',
+                    value: `With this subscriber update, **${name}** has reached **#${rank}** in the Livecountsedit Top 50.`,
+                    inline: false
+                }
+            ],
+            footer: { text: `Update powered by Livecountsedit • Today at ${time}` },
+            timestamp: now.toISOString()
+        };
 
         return {
             username: 'Livecountsedit',
             content: cfg.mention || undefined,
-            embeds: [{
-                title: '📺 YouTube Subscriber Milestone',
-                description: `**${name}** just hit **${milestoneText} subscribers**`,
-                color: 0x00C853,
-                thumbnail: channel.image ? { url: channel.image } : undefined,
-                fields: [
-                    { name: '🏆 Milestone', value: `**${milestoneText} subscribers**`, inline: false },
-                    { name: '📊 Current Subscribers', value: `${subscribers} subscribers`, inline: true },
-                    { name: '🏅 Top 50 Rank', value: `#${rank}`, inline: true },
-                    { name: '⚡ Automatic Tier', value: `Every ${step} subscribers`, inline: true }
-                ],
-                footer: { text: `Update powered by Livecountsedit • Today at ${time}` },
-                timestamp: now.toISOString()
-            }]
+            embeds: [embed]
         };
     }
 
@@ -94,16 +126,17 @@
             const milestone = milestoneFor(count);
             const id = String(c.id);
             const previous = notified.get(id);
+            const now = Date.now();
 
             // Establish the current milestone without sending a startup notification.
             if (previous == null) {
-                notified.set(id, milestone);
+                notified.set(id, { milestone, at: now });
                 continue;
             }
 
-            if (milestone > previous) {
-                notified.set(id, milestone);
-                try { await send(alertPayload(c, milestone, i + 1)); }
+            if (milestone > previous.milestone) {
+                notified.set(id, { milestone, at: now });
+                try { await send(alertPayload(c, milestone, i + 1, previous)); }
                 catch (err) { console.error('[Discord Milestones]', err); }
             }
         }
@@ -154,7 +187,24 @@
             const old = cfg;
             cfg = { ...cfg, enabled: true, webhook: url, mention: mention.value.trim() };
             try {
-                await send({ username: 'Livecountsedit', content: cfg.mention || undefined, embeds: [{ title: '📺 YouTube Subscriber Milestone', description: '**Example Channel** just hit **1,000,000 subscribers**', color: 0x00C853, fields: [{ name: '🏆 Milestone', value: '**1,000,000 subscribers**', inline: false }, { name: '📊 Current Subscribers', value: '1,000,000 subscribers', inline: true }, { name: '🏅 Top 50 Rank', value: '#1', inline: true }, { name: '⚡ Automatic Tier', value: 'Every 10,000 subscribers', inline: true }], footer: { text: 'Update powered by Livecountsedit • Discord milestone alert' }, timestamp: new Date().toISOString() }] });
+                await send({
+                    username: 'Livecountsedit',
+                    content: cfg.mention || undefined,
+                    embeds: [{
+                        author: { name: 'YouTube Subscriber Update', icon_url: 'https://cdn.simpleicons.org/youtube/FF0000' },
+                        title: 'Example Channel just hit 44,200,000 subscribers',
+                        color: 0x00C853,
+                        fields: [
+                            { name: '⏪ Previous milestone', value: '44,100,000 subscribers', inline: false },
+                            { name: '⏩ New milestone', value: '**44,200,000 subscribers**', inline: false },
+                            { name: '⏱️ Duration', value: '17 hours, 35 minutes, 40 seconds', inline: false },
+                            { name: '📈 Subscriber Averages', value: '136,406.15 subscribers per day\n5,683.59 subscribers per hour\n94.73 subscribers per minute', inline: false },
+                            { name: 'ℹ️ Information', value: 'With this subscriber update, **Example Channel** has reached **#1** in the Livecountsedit Top 50.', inline: false }
+                        ],
+                        footer: { text: 'Update powered by Livecountsedit • Today at 07:36' },
+                        timestamp: new Date().toISOString()
+                    }]
+                });
                 status.textContent = 'Test sent successfully.';
             } catch (err) { status.textContent = `Test failed: ${err.message}`; }
             cfg = old;
