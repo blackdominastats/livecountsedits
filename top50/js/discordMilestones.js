@@ -73,7 +73,6 @@
 
     function alertPayload(channel, milestone, rank, previousState) {
         const now = new Date();
-        const time = now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
         const name = channel.name || 'Unknown channel';
         const previousMilestone = previousState ? previousState.milestone : null;
         const duration = previousState ? now.getTime() - previousState.at : 0;
@@ -114,7 +113,7 @@
                         inline: false
                     }
                 ],
-                footer: { text: `Update powered by Livecountsedit • Today at ${time}` },
+                footer: { text: `Update powered by Livecountsedit` },
                 timestamp: now.toISOString()
             }]
         };
@@ -219,7 +218,7 @@
                             { name: '📈 Subscriber Averages', value: '136,406.15 subscribers per day\n5,683.59 subscribers per hour\n94.73 subscribers per minute', inline: false },
                             { name: 'ℹ️ Information', value: 'With this subscriber update, **Example Channel** is currently at **#1** in the Livecountsedit Top 50.', inline: false }
                         ],
-                        footer: { text: 'Update powered by Livecountsedit • Today at 07:36' },
+                        footer: { text: 'Update powered by Livecountsedit' },
                         timestamp: new Date().toISOString()
                     }]
                 });
