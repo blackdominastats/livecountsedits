@@ -35,6 +35,14 @@
         return Math.floor(count / step) * step;
     }
 
+    // Returns the next milestone strictly above the last observed subscriber count.
+    // This lets us detect a milestone even when the live counter jumps over it.
+    function nextMilestoneAfter(count) {
+        const step = milestoneStep(count);
+        if (count < 1_000) return count + 1;
+        return (Math.floor(count / step) + 1) * step;
+    }
+
     function durationParts(ms) {
         const total = Math.max(0, Math.floor(ms / 1000));
         const days = Math.floor(total / 86400);
@@ -77,7 +85,9 @@
         const name = channel.name || 'Unknown channel';
         const previousMilestone = previousState ? previousState.milestone : null;
         const duration = previousState ? now.getTime() - previousState.at : 0;
-        const gained = previousMilestone == null ? 0 : milestone - previousMilestone;
+        const gained = previousState && Number.isFinite(previousState.count)
+            ? milestone - previousState.count
+            : previousMilestone == null ? 0 : milestone - previousMilestone;
         const averages = averageLines(gained, duration);
         const channelUrl = channel.url || channel.link || channel.channelUrl || '';
         const description = channelUrl
@@ -124,31 +134,41 @@
             const count = Number(c.count);
             if (!Number.isFinite(count) || count < 0) continue;
 
-            // IDs are optional in Livecountsedit's Add Channel settings, so do not
-            // disable milestone tracking just because a channel has no ID.
-            const id = String(c.id || `name:${c.name || 'unknown'}:rank:${i + 1}`);
+            // IDs are optional in Livecountsedit's Add Channel settings.
+            // Use the channel name as a stable fallback so rank changes do not reset it.
+            const id = String(c.id || `name:${c.name || 'unknown'}`);
             const milestone = milestoneFor(count);
             const previous = notified.get(id);
             const now = Date.now();
 
             // First observation establishes the baseline and does not send a startup alert.
             if (previous == null) {
-                notified.set(id, { milestone, at: now });
+                notified.set(id, { count, milestone, at: now });
                 continue;
             }
 
-            // Only advance the state after Discord accepts the message. This prevents
-            // a failed webhook request from permanently losing a milestone.
-            if (milestone > previous.milestone && !inFlight.has(id)) {
+            // Subscriber counts can jump between polls. Check whether the live count
+            // has crossed the NEXT milestone rather than requiring an exact count.
+            const next = nextMilestoneAfter(previous.count);
+            const crossed = count >= next && count > previous.count;
+
+            if (crossed && !inFlight.has(id)) {
+                // If the count jumped across several milestones, notify for the highest
+                // milestone reached by this update rather than requiring an exact hit.
+                const crossedMilestone = milestone > previous.milestone ? milestone : next;
                 inFlight.add(id);
                 try {
-                    await send(alertPayload(c, milestone, i + 1, previous));
-                    notified.set(id, { milestone, at: now });
+                    await send(alertPayload(c, crossedMilestone, i + 1, previous));
+                    notified.set(id, { count, milestone: crossedMilestone, at: now });
                 } catch (err) {
                     console.error('[Discord Milestones] Failed to send milestone:', err);
                 } finally {
                     inFlight.delete(id);
                 }
+            } else if (count !== previous.count) {
+                // Keep the actual subscriber count current even when no milestone was crossed.
+                // This is important when counts move up/down between polling cycles.
+                notified.set(id, { ...previous, count });
             }
         }
     }
