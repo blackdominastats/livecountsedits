@@ -5,6 +5,7 @@
     const defaults = { enabled: false, webhook: '', mention: '' };
     let cfg = { ...defaults };
     const notified = new Map();
+    const inFlight = new Set();
     let ready = false;
 
     try { cfg = { ...defaults, ...JSON.parse(localStorage.getItem(KEY) || '{}') }; } catch (_) {}
@@ -14,7 +15,7 @@
     const validWebhook = url => {
         try {
             const u = new URL(url);
-            return u.protocol === 'https:' && u.hostname === 'discord.com' && u.pathname.includes('/api/webhooks/');
+            return u.protocol === 'https:' && (u.hostname === 'discord.com' || u.hostname === 'discordapp.com') && u.pathname.includes('/api/webhooks/');
         } catch (_) { return false; }
     };
     const save = () => localStorage.setItem(KEY, JSON.stringify(cfg));
@@ -61,7 +62,7 @@
     }
 
     async function send(payload) {
-        if (!validWebhook(cfg.webhook)) return;
+        if (!validWebhook(cfg.webhook)) throw new Error('Discord webhook is not configured.');
         const r = await fetch(cfg.webhook, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -85,7 +86,6 @@
 
         return {
             username: 'Livecountsedit',
-            avatar_url: channel.botAvatar || undefined,
             content: cfg.mention || undefined,
             embeds: [{
                 author: {
@@ -120,24 +120,35 @@
         const channels = data.data.slice(0, 50);
         for (let i = 0; i < channels.length; i++) {
             const c = channels[i];
-            if (!c || !c.id) continue;
+            if (!c) continue;
             const count = Number(c.count);
             if (!Number.isFinite(count) || count < 0) continue;
 
+            // IDs are optional in Livecountsedit's Add Channel settings, so do not
+            // disable milestone tracking just because a channel has no ID.
+            const id = String(c.id || `name:${c.name || 'unknown'}:rank:${i + 1}`);
             const milestone = milestoneFor(count);
-            const id = String(c.id);
             const previous = notified.get(id);
             const now = Date.now();
 
+            // First observation establishes the baseline and does not send a startup alert.
             if (previous == null) {
                 notified.set(id, { milestone, at: now });
                 continue;
             }
 
-            if (milestone > previous.milestone) {
-                notified.set(id, { milestone, at: now });
-                try { await send(alertPayload(c, milestone, i + 1, previous)); }
-                catch (err) { console.error('[Discord Milestones]', err); }
+            // Only advance the state after Discord accepts the message. This prevents
+            // a failed webhook request from permanently losing a milestone.
+            if (milestone > previous.milestone && !inFlight.has(id)) {
+                inFlight.add(id);
+                try {
+                    await send(alertPayload(c, milestone, i + 1, previous));
+                    notified.set(id, { milestone, at: now });
+                } catch (err) {
+                    console.error('[Discord Milestones] Failed to send milestone:', err);
+                } finally {
+                    inFlight.delete(id);
+                }
             }
         }
     }
@@ -146,7 +157,7 @@
         if (document.getElementById('dm-styles')) return;
         const s = document.createElement('style');
         s.id = 'dm-styles';
-        s.textContent = `#dm-button{margin-left:4px}#dm-panel{display:none;position:fixed;z-index:100000;right:20px;top:70px;width:min(420px,calc(100vw - 40px));padding:16px;background:#fff;color:#111;border:1px solid #aaa;border-radius:10px;box-shadow:0 8px 30px rgba(0,0,0,.25);font-family:Arial,sans-serif}#dm-panel.open{display:block}#dm-panel h3{margin:0 0 10px}#dm-panel label{display:block;margin:9px 0 4px}#dm-panel input[type=text],#dm-panel input[type=password]{width:100%;box-sizing:border-box;padding:7px}#dm-panel .dm-row{display:flex;gap:8px;margin-top:10px}#dm-panel button{padding:7px 10px;cursor:pointer}#dm-status{margin-top:10px;font-size:12px}.dm-note{font-size:12px;opacity:.75}.dm-tiers{font-size:12px;line-height:1.5;margin:10px 0}`;
+        s.textContent = `#dm-button{margin-left:4px}#dm-panel{display:none;position:fixed;z-index:100000;right:20px;top:70px;width:min(420px,calc(100vw - 40px));padding:16px;background:#fff;color:#111;border:1px solid #aaa;border-radius:10px;box-shadow:0 8px 30px rgba(0,0,0,.25);font-family:Arial,sans-serif}#dm-panel.open{display:block}#dm-panel h3{margin:0 0 10px}#dm-panel label{display:block;margin:9px 0 4px}#dm-panel input[type=text],#dm-panel input[type=password]{width:100%;box-sizing:border-box;padding:7px}#dm-panel .dm-row{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}#dm-panel button{padding:7px 10px;cursor:pointer}#dm-status{margin-top:10px;font-size:12px}.dm-note{font-size:12px;opacity:.75}.dm-tiers{font-size:12px;line-height:1.5;margin:10px 0}`;
         document.head.appendChild(s);
     }
 
@@ -177,7 +188,7 @@
         panel.querySelector('#dm-save').onclick = () => {
             if (enabled.checked && !validWebhook(webhook.value.trim())) return void (status.textContent = 'Enter a valid Discord webhook URL.');
             cfg = { enabled: enabled.checked, webhook: webhook.value.trim(), mention: mention.value.trim() };
-            save(); notified.clear();
+            save(); notified.clear(); inFlight.clear();
             status.textContent = 'Saved. Existing milestones will not fire immediately.';
         };
         panel.querySelector('#dm-test').onclick = async () => {
