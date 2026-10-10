@@ -61,9 +61,10 @@
         ].join('\n');
     }
 
-    function signedPercent(change, previousMilestone) {
-        if (!Number.isFinite(change) || !Number.isFinite(previousMilestone) || previousMilestone <= 0) return '';
-        const percent = (change / previousMilestone) * 100;
+    function signedPercent(change, previousCount) {
+        if (!Number.isFinite(change) || !Number.isFinite(previousCount) || previousCount <= 0) return '';
+        const percent = (change / previousCount) * 100;
+        if (percent === 0) return '0.00% no change';
         const sign = percent > 0 ? '+' : '';
         const direction = percent > 0 ? 'increase' : 'decrease';
         return `${sign}${fmt2(percent)}% ${direction}`;
@@ -84,12 +85,16 @@
         const time = now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
         const name = channel.name || 'Unknown channel';
         const previousMilestone = previousState ? previousState.milestone : null;
+        const previousCount = previousState && Number.isFinite(previousState.count) ? previousState.count : previousMilestone;
+        const currentCount = Number(channel.count);
         const duration = previousState ? now.getTime() - previousState.at : 0;
-        const change = previousMilestone == null ? 0 : milestone - previousMilestone;
+        const change = Number.isFinite(previousCount) && Number.isFinite(currentCount)
+            ? currentCount - previousCount
+            : previousMilestone == null ? 0 : milestone - previousMilestone;
         const increasing = change > 0;
         const decreasing = change < 0;
         const averages = averageLines(change, duration);
-        const percentage = signedPercent(change, previousMilestone);
+        const percentage = signedPercent(change, previousCount);
         const channelUrl = channel.url || channel.link || channel.channelUrl || '';
         const action = decreasing ? 'dropped below' : 'just hit';
         const description = channelUrl
@@ -141,20 +146,18 @@
             const count = Number(c.count);
             if (!Number.isFinite(count) || count < 0) continue;
 
-            // IDs are optional in Livecountsedit's Add Channel settings.
             const id = String(c.id || `name:${c.name || 'unknown'}`);
             const milestone = milestoneFor(count);
             const previous = notified.get(id);
             const now = Date.now();
 
-            // First observation establishes the baseline and does not send a startup alert.
             if (previous == null) {
                 notified.set(id, { count, milestone, at: now });
                 continue;
             }
 
-            // Compare the milestone bucket itself. This detects both upward and downward
-            // crossings, including jumps that skip over several milestone values.
+            // Compare milestone buckets so both upward and downward crossings trigger,
+            // even when the live count jumps over multiple milestones.
             const crossed = milestone !== previous.milestone;
 
             if (crossed && !inFlight.has(id)) {
@@ -168,7 +171,8 @@
                     inFlight.delete(id);
                 }
             } else if (count !== previous.count && !inFlight.has(id)) {
-                // Keep the actual subscriber count current even when no milestone was crossed.
+                // Always retain the latest real subscriber count. Statistics for the next
+                // alert are therefore calculated from actual counts, not rounded milestones.
                 notified.set(id, { ...previous, count });
             }
         }
