@@ -64,7 +64,6 @@
     function signedPercent(change, previousCount) {
         if (!Number.isFinite(change) || !Number.isFinite(previousCount) || previousCount <= 0) return '';
         const percent = (change / previousCount) * 100;
-        if (percent === 0) return '0.00% no change';
         const sign = percent > 0 ? '+' : '';
         const direction = percent > 0 ? 'increase' : 'decrease';
         return `${sign}${fmt2(percent)}% ${direction}`;
@@ -85,16 +84,16 @@
         const time = now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
         const name = channel.name || 'Unknown channel';
         const previousMilestone = previousState ? previousState.milestone : null;
-        const previousCount = previousState && Number.isFinite(previousState.count) ? previousState.count : previousMilestone;
+        const previousCount = previousState ? previousState.count : null;
         const currentCount = Number(channel.count);
         const duration = previousState ? now.getTime() - previousState.at : 0;
-        const change = Number.isFinite(previousCount) && Number.isFinite(currentCount)
-            ? currentCount - previousCount
-            : previousMilestone == null ? 0 : milestone - previousMilestone;
-        const increasing = change > 0;
-        const decreasing = change < 0;
+
+        // Stats are calculated from the actual counts observed at the two milestone
+        // events, while the displayed milestone values remain rounded.
+        const change = Number.isFinite(previousCount) ? currentCount - previousCount : 0;
         const averages = averageLines(change, duration);
         const percentage = signedPercent(change, previousCount);
+        const decreasing = change < 0;
         const channelUrl = channel.url || channel.link || channel.channelUrl || '';
         const action = decreasing ? 'dropped below' : 'just hit';
         const description = channelUrl
@@ -120,7 +119,7 @@
                         value: `**${fmt(milestone)} subscribers**`,
                         inline: false
                     },
-                    ...(previousMilestone != null ? [{ name: '⏱️ Duration', value: durationParts(duration), inline: false }] : []),
+                    ...(previousState ? [{ name: '⏱️ Duration', value: durationParts(duration), inline: false }] : []),
                     ...(averages ? [{ name: '📈 Subscriber Averages', value: averages, inline: false }] : []),
                     ...(percentage ? [{ name: '📊 Percentage Change', value: `**${percentage}**`, inline: false }] : []),
                     {
@@ -156,8 +155,6 @@
                 continue;
             }
 
-            // Compare milestone buckets so both upward and downward crossings trigger,
-            // even when the live count jumps over multiple milestones.
             const crossed = milestone !== previous.milestone;
 
             if (crossed && !inFlight.has(id)) {
@@ -171,8 +168,6 @@
                     inFlight.delete(id);
                 }
             } else if (count !== previous.count && !inFlight.has(id)) {
-                // Always retain the latest real subscriber count. Statistics for the next
-                // alert are therefore calculated from actual counts, not rounded milestones.
                 notified.set(id, { ...previous, count });
             }
         }
@@ -228,15 +223,15 @@
                     content: cfg.mention || undefined,
                     embeds: [{
                         author: { name: 'YouTube Subscriber Update', icon_url: 'https://cdn.simpleicons.org/youtube/FF0000' },
-                        description: '**Example Channel** just hit **44,200,000 subscribers**',
+                        description: '**Example Channel** just hit **20,000,000 subscribers**',
                         color: 0x00C853,
                         thumbnail: { url: 'https://cdn.simpleicons.org/youtube/FF0000' },
                         fields: [
-                            { name: '⏪ Previous milestone', value: '44,100,000 subscribers', inline: false },
-                            { name: '⏩ New milestone', value: '**44,200,000 subscribers**', inline: false },
+                            { name: '⏪ Previous milestone', value: '19,900,000 subscribers', inline: false },
+                            { name: '⏩ New milestone', value: '**20,000,000 subscribers**', inline: false },
                             { name: '⏱️ Duration', value: '17 hours, 35 minutes, 40 seconds', inline: false },
                             { name: '📈 Subscriber Averages', value: '136,406.15 subscribers per day\n5,683.59 subscribers per hour\n94.73 subscribers per minute', inline: false },
-                            { name: '📊 Percentage Change', value: '**+0.23% increase**', inline: false },
+                            { name: '📊 Percentage Change', value: '**+0.50% increase**', inline: false },
                             { name: 'ℹ️ Information', value: 'With this subscriber update, **Example Channel** is currently at **#1** in the Livecountsedit Top 50.', inline: false }
                         ],
                         footer: { text: 'Update powered by Livecountsedit • Today at 07:36' },
