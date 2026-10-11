@@ -86,23 +86,40 @@
         };
     }
 
-    function averageLines(change, durationMs) {
-        const values = averageValues(change, durationMs);
+    function averageComparison(currentValues, previousValues) {
+        if (!currentValues || !previousValues || !Number.isFinite(previousValues.perDay)) return null;
+        const delta = currentValues.perDay - previousValues.perDay;
+        if (!Number.isFinite(delta) || currentValues.perDay === 0) return null;
+        const percent = Math.abs(delta / currentValues.perDay * 100);
+        return {
+            delta,
+            percent,
+            direction: delta < 0 ? 'decrease' : 'increase'
+        };
+    }
+
+    function averageLines(values, previousValues) {
         if (!values) return '';
+        const comparison = averageComparison(values, previousValues);
+        const line = (value, previousKey) => {
+            let suffix = '';
+            if (previousValues && Number.isFinite(previousValues[previousKey])) {
+                const delta = value - previousValues[previousKey];
+                suffix = ` ***(${delta >= 0 ? '+' : ''}${fmt(delta)})***`;
+            }
+            return `**${fmt2(Math.abs(value))}** subscribers per ${previousKey === 'perDay' ? 'day' : previousKey === 'perHour' ? 'hour' : 'minute'}${suffix}`;
+        };
         return [
-            `**${fmt2(Math.abs(values.perDay))}** subscribers per day`,
-            `**${fmt2(Math.abs(values.perHour))}** subscribers per hour`,
-            `**${fmt2(Math.abs(values.perMinute))}** subscribers per minute`
+            line(values.perDay, 'perDay'),
+            line(values.perHour, 'perHour'),
+            line(values.perMinute, 'perMinute')
         ].join('\n');
     }
 
-    // Always calculate this from the two actual milestone values.
-    // Nothing is hardcoded: e.g. 12,400 -> 12,500 = 100 / 12,400 * 100 = 0.81%.
-    function subscriberPercent(previousMilestone, milestone) {
-        if (!Number.isFinite(previousMilestone) || !Number.isFinite(milestone) || previousMilestone === 0) return '';
-        const change = milestone - previousMilestone;
-        const percent = Math.abs(change / previousMilestone * 100);
-        return `${change < 0 ? '▼' : '▲'} ${fmt2(percent)}% ${change < 0 ? 'decrease' : 'increase'}`;
+    function subscriberComparison(values, previousValues) {
+        const comparison = averageComparison(values, previousValues);
+        if (!comparison) return '';
+        return `${comparison.direction === 'decrease' ? '⏬' : '⏫'} ${fmt2(comparison.percent)}% ${comparison.direction}`;
     }
 
     function embedColor(change, durationMs, previousState) {
@@ -131,8 +148,18 @@
         const previousMilestone = previousState ? previousState.milestone : null;
         const duration = previousState ? nowMs - previousState.at : 0;
         const change = Number.isFinite(previousMilestone) ? milestone - previousMilestone : 0;
-        const averages = averageLines(change, duration);
-        const comparison = subscriberPercent(previousMilestone, milestone);
+        const averages = averageValues(change, duration);
+
+        // Compare this milestone's subscriber rate with the rate of the previous milestone.
+        const previousChange = previousState && Number.isFinite(previousState.previousMilestone)
+            ? previousState.milestone - previousState.previousMilestone
+            : 0;
+        const previousAverages = previousState && previousState.durationMs > 0
+            ? averageValues(previousChange, previousState.durationMs)
+            : null;
+        const comparison = subscriberComparison(averages, previousAverages);
+        const averageText = averageLines(averages, previousAverages);
+
         const decreasing = change < 0;
         const channelUrl = channel.url || channel.link || channel.channelUrl || '';
         const action = decreasing ? 'dropped below' : 'just hit';
@@ -165,9 +192,9 @@
                         inline: false
                     },
                     ...(previousState ? [{ name: '⏱️ Duration', value: durationParts(duration), inline: false }] : []),
-                    ...(averages ? [{
+                    ...(averageText ? [{
                         name: `✳️ Subscriber Averages${comparison ? ` (${comparison})` : ''}`,
-                        value: averages,
+                        value: averageText,
                         inline: false
                     }] : []),
                     {
@@ -266,7 +293,10 @@
         panel.querySelector('#dm-save').onclick = () => {
             if (enabled.checked && !validWebhook(webhook.value.trim())) return void (status.textContent = 'Enter a valid Discord webhook URL.');
             cfg = { enabled: enabled.checked, webhook: webhook.value.trim(), mention: mention.value.trim() };
-            save(); notified.clear(); inFlight.clear();
+            save();
+            notified.clear();
+            inFlight.clear();
+            try { localStorage.removeItem(STATE_KEY); } catch (_) {}
             status.textContent = 'Saved. Existing milestones will not fire immediately.';
         };
         panel.querySelector('#dm-test').onclick = async () => {
@@ -281,7 +311,8 @@
                 const testPreviousMilestone = 19_900_000;
                 const testMilestone = 20_000_000;
                 const testChange = testMilestone - testPreviousMilestone;
-                const testPercent = subscriberPercent(testPreviousMilestone, testMilestone);
+                const testDuration = 17 * 3600000 + 35 * 60000 + 40000;
+                const testAverages = averageValues(testChange, testDuration);
                 await send({
                     username: 'Livecountsedit',
                     content: cfg.mention || undefined,
@@ -293,32 +324,27 @@
                         fields: [
                             { name: '⏪ Previous milestone', value: `${fmt(testPreviousMilestone)} subscribers\n${discordTimestamp(testPrevious, 'F')} - ${discordTimestamp(testPrevious, 'R')}`, inline: false },
                             { name: '⏩ New milestone', value: `**${fmt(testMilestone)} subscribers**\n${discordTimestamp(testNow, 'F')} - ${discordTimestamp(testNow, 'R')}`, inline: false },
-                            { name: '⏱️ Duration', value: '17 hours, 35 minutes, 40 seconds', inline: false },
-                            { name: `✳️ Subscriber Averages (${testPercent})`, value: '**136,406.15** subscribers per day\n**5,683.59** subscribers per hour\n**94.73** subscribers per minute', inline: false },
+                            { name: '⏱️ Duration', value: durationParts(testDuration), inline: false },
+                            { name: '✳️ Subscriber Averages', value: averageLines(testAverages, null), inline: false },
                             { name: '🔮 Information', value: '🤝 **Example Channel** is currently ranked **#1** in the Livecountsedit rankings.', inline: false }
                         ],
                         footer: { text: 'Update powered by Livecountsedit' },
-                        timestamp: new Date(testNow).toISOString()
+                        timestamp: new Date().toISOString()
                     }]
                 });
-                status.textContent = 'Test sent.';
-            } catch (err) {
-                status.textContent = `Test failed: ${err.message}`;
-            } finally {
-                cfg = old;
-            }
+                status.textContent = 'Test sent successfully.';
+            } catch (err) { status.textContent = `Test failed: ${err.message}`; }
+            cfg = old;
         };
+
         ready = true;
     }
 
-    const timer = setInterval(check, 10000);
-    const uiTimer = setInterval(ui, 1000);
-    ui();
-    check();
-
+    const timer = setInterval(() => {
+        try { ui(); check(); } catch (err) { console.error('[Discord Milestones]', err); }
+    }, 1000);
     window.addEventListener('beforeunload', () => {
         try { saveState(); } catch (_) {}
         clearInterval(timer);
-        clearInterval(uiTimer);
     }, { once: true });
 })();
