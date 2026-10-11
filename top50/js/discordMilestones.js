@@ -107,7 +107,7 @@
                 const delta = value - previousValues[previousKey];
                 suffix = ` ***(${delta >= 0 ? '+' : ''}${fmt(delta)})***`;
             }
-            return `**${fmt2(Math.abs(value))}** subscribers per ${previousKey === 'perDay' ? 'day' : previousKey === 'perHour' ? 'hour' : 'minute'}${suffix}`;
+            return `**${fmt2(value)}** subscribers per ${previousKey === 'perDay' ? 'day' : previousKey === 'perHour' ? 'hour' : 'minute'}${suffix}`;
         };
         return [
             line(values.perDay, 'perDay'),
