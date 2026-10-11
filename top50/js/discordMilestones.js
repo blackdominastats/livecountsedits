@@ -174,7 +174,7 @@
             embeds: [{
                 author: {
                     name: 'YouTube Subscriber Update',
-                    icon_url: 'https://cdn.simpleicons.org/youtube/FF0000'
+                    icon_url: 'https://pngdownload.io/wp-content/uploads/2023/12/YouTube-Logo-PNG-Symbol-for-Video-Platform-Transparent-jpg.webp'
                 },
                 description,
                 url: channelUrl || undefined,
@@ -317,10 +317,10 @@
                     username: 'Livecountsedit',
                     content: cfg.mention || undefined,
                     embeds: [{
-                        author: { name: 'YouTube Subscriber Update', icon_url: 'https://cdn.simpleicons.org/youtube/FF0000' },
+                        author: { name: 'YouTube Subscriber Update', icon_url: 'https://pngdownload.io/wp-content/uploads/2023/12/YouTube-Logo-PNG-Symbol-for-Video-Platform-Transparent-jpg.webp' },
                         description: '**Example Channel** just hit **20,000,000 subscribers**',
                         color: 0x57F287,
-                        thumbnail: { url: 'https://cdn.simpleicons.org/youtube/FF0000' },
+                        thumbnail: { url: 'https://pngdownload.io/wp-content/uploads/2023/12/YouTube-Logo-PNG-Symbol-for-Video-Platform-Transparent-jpg.webp' },
                         fields: [
                             { name: '⏪ Previous milestone', value: `${fmt(testPreviousMilestone)} subscribers\n${discordTimestamp(testPrevious, 'F')} - ${discordTimestamp(testPrevious, 'R')}`, inline: false },
                             { name: '⏩ New milestone', value: `**${fmt(testMilestone)} subscribers**\n${discordTimestamp(testNow, 'F')} - ${discordTimestamp(testNow, 'R')}`, inline: false },
