@@ -96,8 +96,11 @@
         ].join('\n');
     }
 
-    function subscriberPercent(change, previousMilestone) {
-        if (!Number.isFinite(change) || !Number.isFinite(previousMilestone) || previousMilestone === 0) return '';
+    // Always calculate this from the two actual milestone values.
+    // Nothing is hardcoded: e.g. 12,400 -> 12,500 = 100 / 12,400 * 100 = 0.81%.
+    function subscriberPercent(previousMilestone, milestone) {
+        if (!Number.isFinite(previousMilestone) || !Number.isFinite(milestone) || previousMilestone === 0) return '';
+        const change = milestone - previousMilestone;
         const percent = Math.abs(change / previousMilestone * 100);
         return `${change < 0 ? '▼' : '▲'} ${fmt2(percent)}% ${change < 0 ? 'decrease' : 'increase'}`;
     }
@@ -129,7 +132,7 @@
         const duration = previousState ? nowMs - previousState.at : 0;
         const change = Number.isFinite(previousMilestone) ? milestone - previousMilestone : 0;
         const averages = averageLines(change, duration);
-        const comparison = subscriberPercent(change, previousMilestone);
+        const comparison = subscriberPercent(previousMilestone, milestone);
         const decreasing = change < 0;
         const channelUrl = channel.url || channel.link || channel.channelUrl || '';
         const action = decreasing ? 'dropped below' : 'just hit';
@@ -183,8 +186,6 @@
         if (!cfg.enabled || !validWebhook(cfg.webhook)) return;
         if (typeof data === 'undefined' || !data || !Array.isArray(data.data)) return;
 
-        // Monitor every channel in the live data, not just the displayed Top 50.
-        // The index is retained as the channel's current rank in the full dataset.
         const channels = data.data;
         for (let i = 0; i < channels.length; i++) {
             const c = channels[i];
@@ -277,6 +278,10 @@
             try {
                 const testNow = Date.now();
                 const testPrevious = testNow - (17 * 3600000 + 35 * 60000 + 40000);
+                const testPreviousMilestone = 19_900_000;
+                const testMilestone = 20_000_000;
+                const testChange = testMilestone - testPreviousMilestone;
+                const testPercent = subscriberPercent(testPreviousMilestone, testMilestone);
                 await send({
                     username: 'Livecountsedit',
                     content: cfg.mention || undefined,
@@ -286,28 +291,34 @@
                         color: 0x57F287,
                         thumbnail: { url: 'https://cdn.simpleicons.org/youtube/FF0000' },
                         fields: [
-                            { name: '⏪ Previous milestone', value: `19,900,000 subscribers\n${discordTimestamp(testPrevious, 'F')} - ${discordTimestamp(testPrevious, 'R')}`, inline: false },
-                            { name: '⏩ New milestone', value: `**20,000,000 subscribers**\n${discordTimestamp(testNow, 'F')} - ${discordTimestamp(testNow, 'R')}`, inline: false },
+                            { name: '⏪ Previous milestone', value: `${fmt(testPreviousMilestone)} subscribers\n${discordTimestamp(testPrevious, 'F')} - ${discordTimestamp(testPrevious, 'R')}`, inline: false },
+                            { name: '⏩ New milestone', value: `**${fmt(testMilestone)} subscribers**\n${discordTimestamp(testNow, 'F')} - ${discordTimestamp(testNow, 'R')}`, inline: false },
                             { name: '⏱️ Duration', value: '17 hours, 35 minutes, 40 seconds', inline: false },
-                            { name: '✳️ Subscriber Averages (▲ 0.50% increase)', value: '**136,406.15** subscribers per day\n**5,683.59** subscribers per hour\n**94.73** subscribers per minute', inline: false },
+                            { name: `✳️ Subscriber Averages (${testPercent})`, value: '**136,406.15** subscribers per day\n**5,683.59** subscribers per hour\n**94.73** subscribers per minute', inline: false },
                             { name: '🔮 Information', value: '🤝 **Example Channel** is currently ranked **#1** in the Livecountsedit rankings.', inline: false }
                         ],
                         footer: { text: 'Update powered by Livecountsedit' },
-                        timestamp: new Date().toISOString()
+                        timestamp: new Date(testNow).toISOString()
                     }]
                 });
-                status.textContent = 'Test sent successfully.';
-            } catch (err) { status.textContent = `Test failed: ${err.message}`; }
-            cfg = old;
+                status.textContent = 'Test sent.';
+            } catch (err) {
+                status.textContent = `Test failed: ${err.message}`;
+            } finally {
+                cfg = old;
+            }
         };
         ready = true;
     }
 
-    const timer = setInterval(() => {
-        try { ui(); check(); } catch (err) { console.error('[Discord Milestones]', err); }
-    }, 1000);
+    const timer = setInterval(check, 10000);
+    const uiTimer = setInterval(ui, 1000);
+    ui();
+    check();
+
     window.addEventListener('beforeunload', () => {
         try { saveState(); } catch (_) {}
         clearInterval(timer);
+        clearInterval(uiTimer);
     }, { once: true });
 })();
