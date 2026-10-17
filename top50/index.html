@@ -577,6 +577,16 @@
         <div id="fyscSettings" class="settings hidden">
             <h2>FYSC Stream Hub</h2>
 
+            <div class="fysc-api-url-settings" style="margin: 12px 0; padding: 12px; border: 1px solid #777; border-radius: 8px;">
+                <h3>FYSC API URL</h3>
+                <p>Default API runs on the connected Supabase project. Set a custom compatible API base URL here if you host your own. Keep the trailing slash optional.</p>
+                <label for="fyscApiUrl">API base URL:</label>
+                <input id="fyscApiUrl" type="url" class="l-width" placeholder="https://example.com/" autocomplete="off">
+                <button type="button" onclick="saveFYSCAPIURL()">Save API URL</button>
+                <button type="button" onclick="resetFYSCAPIURL()">Use Supabase default</button>
+                <span id="fyscApiUrlStatus" role="status" style="margin-left: 8px;"></span>
+            </div>
+
             <div class="settings-container fysc-gain-settings">
                 <div>
                     <label><strong>Min Gain (for streams):</strong><br>
