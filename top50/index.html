@@ -829,8 +829,19 @@
                 alert("Incorrect code.");
                 return;
             }
-            localStorage.setItem("lcedit_grind50_connected_v1", "1");
-            alert("Grind Hub connected. Open Grind Hub to import your saved Top 50 channels.");
+            // Export the current Top 50 channel names while this page has access to its app data.
+            // This is a convenience connection only, not a security boundary.
+            try {
+                const channels = (typeof data !== "undefined" && data && Array.isArray(data.data))
+                    ? data.data.map(channel => channel && channel.name).filter(Boolean)
+                    : [];
+                localStorage.setItem("lcedit_grind50_channels_v1", JSON.stringify(channels));
+                localStorage.setItem("lcedit_grind50_connected_v1", "1");
+                alert("Grind Hub connected. Exported " + channels.length + " channel names. Opening Grind Hub now.");
+            } catch (error) {
+                alert("Could not export Top 50 channels. Please refresh Top 50 and try again.");
+                return;
+            }
             window.location.href = "../grind/";
         }
     </script>
