@@ -2,15 +2,25 @@ function updateFYSCAddCommand() {
     const minInput = document.getElementById('fyscAddMin');
     const maxInput = document.getElementById('fyscAddMax');
     const output = document.getElementById('connect');
-    if (!minInput || !maxInput || !output || !code) return;
+    if (!minInput || !maxInput || !output || typeof code === 'undefined' || !code) return;
     const min = Number(minInput.value);
     const max = Number(maxInput.value);
     if (!Number.isSafeInteger(min) || !Number.isSafeInteger(max) || min < 0 || max < min) {
-        output.value = 'Set valid whole-number gains: minimum must be 0 or higher and maximum must be at least the minimum.';
+        output.value = 'Enter whole-number counts with minimum >= 0 and maximum >= minimum.';
         return;
     }
-    output.value = '$(urlfetch ' + apiurl + code + '/$(userid)/' + min + '/' + max + '?returnText=Added $(user)! )'.replace('! )', '!)');
+    output.value = '$(urlfetch ' + apiurl + code + '/$(userid)/' + min + '/' + max + '?returnText=Added%20$(user)! )'.replace('! )', '!)');
 }
+function refreshFYSCAddCommand() {
+    updateFYSCAddCommand();
+}
+document.addEventListener('DOMContentLoaded', () => {
+    const minInput = document.getElementById('fyscAddMin');
+    const maxInput = document.getElementById('fyscAddMax');
+    if (minInput) minInput.addEventListener('input', refreshFYSCAddCommand);
+    if (maxInput) maxInput.addEventListener('input', refreshFYSCAddCommand);
+});
+
 const FYSC_SUPABASE_API_URL = "https://dqxbghyuudhspiaxmcnt.supabase.co/functions/v1/fysc-api/";
 const FYSC_API_URL_STORAGE_KEY = "lcedit_fysc_api_url_v1";
 let apiurl = (() => {
