@@ -51,6 +51,7 @@
     <div class="channel-row" style="margin-top:12px">
       <input id="newChannel" maxlength="25" placeholder="Twitch channel name (e.g. yourchannel)" autocomplete="off">
       <button id="addChannel" type="button">Add channel</button>
+      <button id="syncTop50" class="secondary" type="button">Fetch Top 50 channels</button>
     </div>
     <div id="status" role="status" aria-live="polite"></div>
   </section>
@@ -98,7 +99,64 @@
     if (preferred && channels.includes(preferred.toLowerCase())) select.value = preferred.toLowerCase();
   }
   function say(message) { status.textContent = message; }
+
+  function getValidNames(values) {
+    return [...new Set(values.map(v => String(v || '').trim().replace(/^@/, '').toLowerCase())
+      .filter(v => /^[a-z0-9_]{1,25}$/.test(v)))];
+  }
+
+  async function importTop50Channels() {
+    if (localStorage.getItem('lcedit_grind50_connected_v1') !== '1') {
+      say('Not connected yet. Go to Top 50 and use “Admin: Connect Grind Hub” with the connection code.');
+      renderChannels();
+      return;
+    }
+
+    try {
+      const db = await new Promise((resolve, reject) => {
+        const request = indexedDB.open('LCEDIT');
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error || new Error('Could not open Top 50 storage'));
+      });
+
+      if (!db.objectStoreNames.contains('top50')) {
+        db.close();
+        say('Top 50 storage was not found in this browser. Open Top 50, save your channels, then try again.');
+        renderChannels();
+        return;
+      }
+
+      const records = await new Promise((resolve, reject) => {
+        const request = db.transaction('top50', 'readonly').objectStore('top50').getAll();
+        request.onsuccess = () => resolve(request.result || []);
+        request.onerror = () => reject(request.error || new Error('Could not read saved Top 50 channels'));
+      });
+      db.close();
+
+      const record = records.find(item => item && Array.isArray(item.data)) || records[0];
+      const top50Names = record && Array.isArray(record.data)
+        ? record.data.map(channel => channel && channel.name).filter(Boolean)
+        : [];
+      const imported = getValidNames(top50Names);
+      const existing = getChannels();
+      const merged = [...new Set([...existing, ...imported])];
+      localStorage.setItem(storageKey, JSON.stringify(merged));
+      renderChannels();
+      if (imported.length) {
+        say('Imported ' + imported.length + ' channel name(s) from Top 50. Select one above.');
+      } else {
+        say('Connected, but no Twitch-compatible channel names were found in Top 50 storage. Save your Top 50 data and try again, or add a Twitch channel manually.');
+      }
+    } catch (error) {
+      renderChannels();
+      say('Could not read Top 50 channels. Open Top 50 in this same browser first, then retry.');
+    }
+  }
+
   renderChannels();
+  importTop50Channels();
+
+  document.getElementById('syncTop50').addEventListener('click', importTop50Channels);
 
   document.getElementById('addChannel').addEventListener('click', () => {
     const input = document.getElementById('newChannel');
