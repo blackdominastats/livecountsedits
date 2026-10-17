@@ -608,8 +608,17 @@
                 <div class="fysc-command-card">
                     <h4>Add User Command</h4>
                     <p>Allows users to add themselves to the leaderboard.</p>
-                    <p class="fysc-example"><strong>Example:</strong> <code>{!add 100/200}</code> - 100 is min gain, 200
-                        is max gain</p>
+                    <p class="fysc-example"><strong>Starting range:</strong> choose the minimum and maximum gains assigned when a user is added.</p>
+                    <div style="display:flex;gap:12px;flex-wrap:wrap;margin:10px 0">
+                        <label>Minimum gain
+                            <input id="fyscAddMin" type="number" min="0" step="1" value="75000000" style="display:block;max-width:220px">
+                        </label>
+                        <label>Maximum gain
+                            <input id="fyscAddMax" type="number" min="0" step="1" value="90000000" style="display:block;max-width:220px">
+                        </label>
+                        <button type="button" onclick="updateFYSCAddCommand()">Update Add Command</button>
+                    </div>
+                    <p class="fysc-example">Example range: 75,000,000 to 90,000,000. These values are included in the generated command.</p>
                     <label><strong>Command Response:</strong></label>
                     <div class="streamer-mode-wrapper" style="width: 100%">
                     <textarea id="connect" autocomplete="off" rows="4"
