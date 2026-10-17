@@ -1,3 +1,16 @@
+function updateFYSCAddCommand() {
+    const minInput = document.getElementById('fyscAddMin');
+    const maxInput = document.getElementById('fyscAddMax');
+    const output = document.getElementById('connect');
+    if (!minInput || !maxInput || !output || !code) return;
+    const min = Number(minInput.value);
+    const max = Number(maxInput.value);
+    if (!Number.isSafeInteger(min) || !Number.isSafeInteger(max) || min < 0 || max < min) {
+        output.value = 'Set valid whole-number gains: minimum must be 0 or higher and maximum must be at least the minimum.';
+        return;
+    }
+    output.value = '$(urlfetch ' + apiurl + code + '/$(userid)/' + min + '/' + max + '?returnText=Added $(user)! )'.replace('! )', '!)');
+}
 const FYSC_SUPABASE_API_URL = "https://dqxbghyuudhspiaxmcnt.supabase.co/functions/v1/fysc-api/";
 const FYSC_API_URL_STORAGE_KEY = "lcedit_fysc_api_url_v1";
 let apiurl = (() => {
@@ -569,7 +582,7 @@ async function initLoad(redo, previousTheme) {
         await loadScripts();
         initScripts();
         code = data.uuid
-        document.getElementById('connect').innerText = '$(urlfetch ' + apiurl + '' + code + '/$(userid)/$(query)?returnText=Added $(user)!)';
+        updateFYSCAddCommand();
         document.getElementById('connect2').innerText = '$(urlfetch ' + apiurl + '' + code + '/$(userid)?values=10,20&returnText=$(user) uploaded $(query)!)';
         document.getElementById('connect3').innerText = '$(urlfetch ' + apiurl + '' + code + '/$(userid)/$(query)?value=edit&returnText=Edited $(user)!)';
         document.getElementById('connect4').innerText = '$(urlfetch ' + apiurl + '' + code + '/$(userid)/user)';
