@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LCEDIT Grind Hub</title>
+  <meta name="description" content="A simple command helper for your LCEDIT Top 50 channels.">
+  <link rel="icon" href="../logo.png">
+  <style>
+    :root { color-scheme: dark; --bg:#0b1020; --panel:#131b30; --line:#283653; --text:#eef3ff; --muted:#9eacc8; --accent:#8b5cf6; --accent2:#22d3ee; }
+    * { box-sizing:border-box; }
+    body { margin:0; min-height:100vh; font:16px/1.5 system-ui,-apple-system,Segoe UI,sans-serif; color:var(--text); background:radial-gradient(ellipse at top,#20224a 0%,var(--bg) 58%); }
+    main { width:min(900px,calc(100% - 32px)); margin:0 auto; padding:44px 0 64px; }
+    .eyebrow { color:var(--accent2); text-transform:uppercase; letter-spacing:.16em; font-size:.75rem; font-weight:800; }
+    h1 { margin:.4rem 0; font-size:clamp(2rem,6vw,3.6rem); letter-spacing:-.04em; line-height:1.05; }
+    .intro { color:var(--muted); max-width:650px; }
+    .panel { margin-top:24px; padding:24px; border:1px solid var(--line); border-radius:20px; background:rgba(19,27,48,.92); box-shadow:0 18px 60px #0003; }
+    label { display:block; margin-bottom:8px; font-weight:700; }
+    .channel-row { display:grid; grid-template-columns:1fr auto; gap:10px; }
+    input,select,button { font:inherit; }
+    input,select { width:100%; min-width:0; padding:12px 14px; border:1px solid #354362; border-radius:10px; color:var(--text); background:#0b1224; }
+    button { border:0; border-radius:10px; padding:12px 16px; font-weight:800; color:white; background:var(--accent); cursor:pointer; transition:transform .15s,opacity .15s; }
+    button:hover:not(:disabled) { transform:translateY(-1px); }
+    button:disabled { cursor:not-allowed; opacity:.48; }
+    .secondary { color:var(--text); background:#26334f; border:1px solid #3b4b6c; }
+    .commands { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px; }
+    .command { padding:18px; border:1px solid var(--line); border-radius:16px; background:#0e1629; }
+    .command h2 { margin:0; font-size:1.1rem; }
+    .cmd { display:inline-block; margin:14px 0; padding:5px 9px; border-radius:8px; color:#c4b5fd; background:#312e5d; font:700 1.05rem ui-monospace,SFMono-Regular,Consolas,monospace; }
+    .command button { width:100%; }
+    .hint { margin:12px 0 0; color:var(--muted); font-size:.9rem; }
+    #status { min-height:1.5em; margin-top:14px; color:#a5f3fc; }
+    .foot { margin-top:22px; color:var(--muted); font-size:.88rem; }
+    a { color:#c4b5fd; }
+    @media(max-width:650px) { .commands { grid-template-columns:1fr; } .panel { padding:18px; } .channel-row { grid-template-columns:1fr; } }
+  </style>
+</head>
+<body>
+<main>
+  <div class="eyebrow">Livecountsedit · Community tool</div>
+  <h1>Grind Hub<span style="color:var(--accent2)">.</span></h1>
+  <p class="intro">Pick a channel and quickly copy your stream commands. Each command has its own 3-second cooldown so you can’t accidentally click the same button repeatedly.</p>
+
+  <section class="panel" aria-labelledby="channel-title">
+    <label id="channel-title" for="channel">Choose a channel</label>
+    <div class="channel-row">
+      <select id="channel" aria-label="Channel list"><option value="">Choose a saved channel…</option></select>
+      <button id="openChat" class="secondary" type="button">Open Twitch chat</button>
+    </div>
+    <p class="hint">Add a channel name below to save it to this browser. Choose the channel whose chat you intend to use.</p>
+    <div class="channel-row" style="margin-top:12px">
+      <input id="newChannel" maxlength="25" placeholder="Twitch channel name (e.g. yourchannel)" autocomplete="off">
+      <button id="addChannel" type="button">Add channel</button>
+    </div>
+    <div id="status" role="status" aria-live="polite"></div>
+  </section>
+
+  <section class="panel" aria-label="Commands">
+    <div class="commands">
+      <article class="command">
+        <h2>Video</h2><div class="cmd">!video</div>
+        <p class="hint">Copy the video command for the selected channel.</p>
+        <button type="button" data-command="!video">Copy !video</button>
+      </article>
+      <article class="command">
+        <h2>Boost</h2><div class="cmd">!boost</div>
+        <p class="hint">Copy the boost command for the selected channel.</p>
+        <button type="button" data-command="!boost">Copy !boost</button>
+      </article>
+      <article class="command">
+        <h2>Viral</h2><div class="cmd">!viral</div>
+        <p class="hint">Copy the viral command for the selected channel.</p>
+        <button type="button" data-command="!viral">Copy !viral</button>
+      </article>
+    </div>
+    <p class="foot">This helper copies commands for you to send manually; it does not sign in to Twitch or send chat messages automatically. Please follow the channel’s rules and only use commands as intended.</p>
+  </section>
+  <p class="foot"><a href="../top50/">Back to Top 50</a> · <a href="../">LCEDIT home</a></p>
+</main>
+<script>
+(() => {
+  const select = document.getElementById('channel');
+  const status = document.getElementById('status');
+  const storageKey = 'lcedit_grind_channels_v1';
+  const cooldownMs = 3000;
+  const cooldowns = new Map();
+
+  function getChannels() {
+    try {
+      const list = JSON.parse(localStorage.getItem(storageKey) || '[]');
+      return Array.isArray(list) ? list.filter(v => typeof v === 'string' && /^[a-zA-Z0-9_]{1,25}$/.test(v)) : [];
+    } catch { return []; }
+  }
+  function renderChannels(preferred = '') {
+    const channels = getChannels();
+    select.replaceChildren(new Option('Choose a saved channel…', ''));
+    channels.forEach(name => select.add(new Option(name, name)));
+    if (preferred && channels.includes(preferred.toLowerCase())) select.value = preferred.toLowerCase();
+  }
+  function say(message) { status.textContent = message; }
+  renderChannels();
+
+  document.getElementById('addChannel').addEventListener('click', () => {
+    const input = document.getElementById('newChannel');
+    const name = input.value.trim().replace(/^@/, '').toLowerCase();
+    if (!/^[a-z0-9_]{1,25}$/.test(name)) {
+      say('Enter a valid Twitch channel name (letters, numbers, and underscores).');
+      return;
+    }
+    const channels = getChannels();
+    if (!channels.includes(name)) channels.push(name);
+    localStorage.setItem(storageKey, JSON.stringify(channels));
+    renderChannels(name);
+    input.value = '';
+    say('Saved channel: ' + name);
+  });
+
+  document.getElementById('openChat').addEventListener('click', () => {
+    const channel = select.value;
+    if (!channel) { say('Choose a channel first.'); return; }
+    window.open('https://www.twitch.tv/popout/' + encodeURIComponent(channel) + '/chat?popout=', '_blank', 'noopener,noreferrer');
+    say('Opened chat for ' + channel + '. Commands are copied, not sent automatically.');
+  });
+
+  document.querySelectorAll('[data-command]').forEach(button => {
+    button.addEventListener('click', async () => {
+      const channel = select.value;
+      if (!channel) { say('Choose a channel first.'); return; }
+      const command = button.dataset.command;
+      const now = Date.now();
+      const readyAt = cooldowns.get(command) || 0;
+      if (now < readyAt) return;
+      cooldowns.set(command, now + cooldownMs);
+      button.disabled = true;
+      let remaining = 3;
+      const original = 'Copy ' + command;
+      button.textContent = 'Wait ' + remaining + 's';
+      const ticker = window.setInterval(() => {
+        remaining -= 1;
+        if (remaining <= 0) {
+          window.clearInterval(ticker);
+          button.disabled = false;
+          button.textContent = original;
+        } else {
+          button.textContent = 'Wait ' + remaining + 's';
+        }
+      }, 1000);
+      try {
+        await navigator.clipboard.writeText(command);
+        say(command + ' copied for ' + channel + '. Paste it into that channel’s chat when appropriate.');
+      } catch {
+        say('Clipboard access was blocked. Copy this command manually: ' + command + ' (channel: ' + channel + ')');
+      }
+    });
+  });
+})();
+</script>
+</body>
+</html>
