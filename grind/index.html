@@ -113,30 +113,10 @@
     }
 
     try {
-      const db = await new Promise((resolve, reject) => {
-        const request = indexedDB.open('LCEDIT');
-        request.onsuccess = () => resolve(request.result);
-        request.onerror = () => reject(request.error || new Error('Could not open Top 50 storage'));
-      });
-
-      if (!db.objectStoreNames.contains('top50')) {
-        db.close();
-        say('Top 50 storage was not found in this browser. Open Top 50, save your channels, then try again.');
-        renderChannels();
-        return;
-      }
-
-      const records = await new Promise((resolve, reject) => {
-        const request = db.transaction('top50', 'readonly').objectStore('top50').getAll();
-        request.onsuccess = () => resolve(request.result || []);
-        request.onerror = () => reject(request.error || new Error('Could not read saved Top 50 channels'));
-      });
-      db.close();
-
-      const record = records.find(item => item && Array.isArray(item.data)) || records[0];
-      const top50Names = record && Array.isArray(record.data)
-        ? record.data.map(channel => channel && channel.name).filter(Boolean)
-        : [];
+      // Top 50 exports its current channel names from the page where its data is available.
+      // Both pages share the same GitHub Pages origin, so this key is readable here.
+      const top50Names = JSON.parse(localStorage.getItem('lcedit_grind50_channels_v1') || '[]');
+      if (!Array.isArray(top50Names)) throw new Error('Invalid Top 50 channel list');
       const imported = getValidNames(top50Names);
       const existing = getChannels();
       const merged = [...new Set([...existing, ...imported])];
