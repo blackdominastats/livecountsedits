@@ -1,4 +1,53 @@
-let apiurl = window.location.href.includes('lcedit.com') ? "https://api.lcedit.com/" : 'http://localhost:1112/';
+const FYSC_SUPABASE_API_URL = "https://dqxbghyuudhspiaxmcnt.supabase.co/functions/v1/fysc-api/";
+const FYSC_API_URL_STORAGE_KEY = "lcedit_fysc_api_url_v1";
+let apiurl = (() => {
+    try {
+        const custom = localStorage.getItem(FYSC_API_URL_STORAGE_KEY);
+        return (custom || (window.location.href.includes('lcedit.com') ? "https://api.lcedit.com/" : FYSC_SUPABASE_API_URL)).trim().replace(/\/+$/, '') + '/';
+    } catch (_) {
+        return FYSC_SUPABASE_API_URL;
+    }
+})();
+function saveFYSCAPIURL() {
+    const input = document.getElementById('fyscApiUrl');
+    const status = document.getElementById('fyscApiUrlStatus');
+    const value = (input.value || '').trim();
+    if (value && !/^https?:\/\//i.test(value)) {
+        status.textContent = 'Enter a valid http(s) URL.';
+        return;
+    }
+    try {
+        if (value) localStorage.setItem(FYSC_API_URL_STORAGE_KEY, value.replace(/\/+$/, '') + '/');
+        else localStorage.removeItem(FYSC_API_URL_STORAGE_KEY);
+        apiurl = (value || (window.location.href.includes('lcedit.com') ? "https://api.lcedit.com/" : FYSC_SUPABASE_API_URL)).replace(/\/+$/, '') + '/';
+        document.querySelectorAll('#connect,#connect2,#connect3,#connect4,#connect5,#connect6').forEach((el) => {
+            if (typeof code !== 'undefined' && code) {
+                const id = el.id;
+                const paths = {
+                    connect: code + '/$(userid)/$(query)?returnText=Added $(user)!',
+                    connect2: code + '/$(userid)?values=10,20&returnText=$(user) uploaded $(query)!',
+                    connect3: code + '/$(userid)/$(query)?value=edit&returnText=Edited $(user)!',
+                    connect4: code + '/$(userid)/user',
+                    connect5: code + '/$(userid)/gains',
+                    connect6: code + '/$(userid)/rank'
+                };
+                el.value = '$(urlfetch ' + apiurl + paths[id] + ')';
+            }
+        });
+        status.textContent = 'Saved. New command URLs are updated; reconnect/re-copy commands if needed.';
+    } catch (_) {
+        status.textContent = 'Could not save the URL in this browser.';
+    }
+}
+function resetFYSCAPIURL() {
+    const input = document.getElementById('fyscApiUrl');
+    input.value = '';
+    saveFYSCAPIURL();
+}
+document.addEventListener('DOMContentLoaded', () => {
+    const input = document.getElementById('fyscApiUrl');
+    if (input) input.value = localStorage.getItem(FYSC_API_URL_STORAGE_KEY) || '';
+});
 let currentIndex = 0;
 let auditTimeout;
 let saveInterval;
