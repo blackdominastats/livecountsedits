@@ -97,6 +97,7 @@
                 </div>
                 <div>
                     <button id="pauseB" onclick="pause()">Pause</button>
+                    <button id="grindAdminButton" onclick="connectGrindHub()">Admin: Connect Grind Hub</button>
                 </div>
                 <div>
                     <button onclick="reset()">Reset</button>
@@ -820,6 +821,19 @@
     <script src="./js/utils.js?v=7.10.2"></script>
     <script src="./js/scripts.js?v=7.10.7"></script>
     <script src="./index.js?v=7.10.12"></script>
+    <script>
+        function connectGrindHub() {
+            const code = prompt("Enter the Grind Hub connection code:");
+            if (code === null) return;
+            if (code !== "grind50stop") {
+                alert("Incorrect code.");
+                return;
+            }
+            localStorage.setItem("lcedit_grind50_connected_v1", "1");
+            alert("Grind Hub connected. Open Grind Hub to import your saved Top 50 channels.");
+            window.location.href = "../grind/";
+        }
+    </script>
     <center>
         <a href="../about/discord.html" class="discord">Join the Discord for support, suggestions, and bug
             reports</a>
