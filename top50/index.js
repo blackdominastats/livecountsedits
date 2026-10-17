@@ -3,7 +3,7 @@ const FYSC_API_URL_STORAGE_KEY = "lcedit_fysc_api_url_v1";
 let apiurl = (() => {
     try {
         const custom = localStorage.getItem(FYSC_API_URL_STORAGE_KEY);
-        return (custom || (window.location.href.includes('lcedit.com') ? "https://api.lcedit.com/" : FYSC_SUPABASE_API_URL)).trim().replace(/\/+$/, '') + '/';
+        return (custom || FYSC_SUPABASE_API_URL).trim().replace(/\/+$/, '') + '/';
     } catch (_) {
         return FYSC_SUPABASE_API_URL;
     }
@@ -19,7 +19,7 @@ function saveFYSCAPIURL() {
     try {
         if (value) localStorage.setItem(FYSC_API_URL_STORAGE_KEY, value.replace(/\/+$/, '') + '/');
         else localStorage.removeItem(FYSC_API_URL_STORAGE_KEY);
-        apiurl = (value || (window.location.href.includes('lcedit.com') ? "https://api.lcedit.com/" : FYSC_SUPABASE_API_URL)).replace(/\/+$/, '') + '/';
+        apiurl = (value || FYSC_SUPABASE_API_URL).replace(/\/+$/, '') + '/';
         document.querySelectorAll('#connect,#connect2,#connect3,#connect4,#connect5,#connect6').forEach((el) => {
             if (typeof code !== 'undefined' && code) {
                 const id = el.id;
