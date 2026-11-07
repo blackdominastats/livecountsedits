@@ -52,16 +52,45 @@ const server = http.createServer((req, res) => {
     res.setHeader("Access-Control-Allow-Headers", "Content-Type");
   }
   if (req.method === "OPTIONS") { res.writeHead(204); return res.end(); }
-  if (req.method !== "POST" || req.url !== "/snapshot") return sendJson(res, 404, { error: "Not found" });
+  if (req.method !== "POST" || !["/snapshot", "/milestone"].includes(req.url)) {
+    return sendJson(res, 404, { error: "Not found" });
+  }
 
   let body = "";
   req.on("data", chunk => {
     body += chunk;
     if (body.length > 2_000_000) req.destroy();
   });
-  req.on("end", () => {
+  req.on("end", async () => {
+    let incoming;
+    try { incoming = JSON.parse(body || "{}"); }
+    catch { return sendJson(res, 400, { error: "Invalid JSON" }); }
+
+    if (req.url === "/milestone") {
+      try {
+        if (!Array.isArray(incoming.embeds) || incoming.embeds.length === 0) {
+          return sendJson(res, 400, { error: "Milestone payload must include an embed" });
+        }
+        const targetId = process.env.DISCORD_CHANNEL_ID;
+        if (!targetId) return sendJson(res, 500, { error: "Missing DISCORD_CHANNEL_ID in discord-bot/.env" });
+        if (!client.isReady()) return sendJson(res, 503, { error: "Discord bot is not ready yet" });
+        const target = await client.channels.fetch(targetId);
+        if (!target || !target.isTextBased() || typeof target.send !== "function") {
+          return sendJson(res, 400, { error: "DISCORD_CHANNEL_ID is not a text channel the bot can access" });
+        }
+        const message = {
+          content: typeof incoming.content === "string" ? incoming.content : undefined,
+          embeds: incoming.embeds.slice(0, 10).map(embed => EmbedBuilder.from(embed))
+        };
+        await target.send(message);
+        return sendJson(res, 200, { ok: true });
+      } catch (error) {
+        console.error("Could not send milestone notification:", error);
+        return sendJson(res, 500, { error: error.message || "Could not send milestone notification" });
+      }
+    }
+
     try {
-      const incoming = JSON.parse(body || "{}");
       if (!Array.isArray(incoming.channels) || typeof incoming.milestones !== "object" || !incoming.milestones) {
         return sendJson(res, 400, { error: "Invalid snapshot format" });
       }
@@ -78,12 +107,12 @@ const server = http.createServer((req, res) => {
       };
       saveSnapshot();
       return sendJson(res, 200, { ok: true, channels: snapshot.channels.length, receivedAt: snapshot.receivedAt });
-    } catch {
-      return sendJson(res, 400, { error: "Invalid JSON" });
+    } catch (error) {
+      console.error("Could not process snapshot:", error);
+      return sendJson(res, 400, { error: "Invalid snapshot format" });
     }
   });
 });
-
 function fmt(value) {
   return Math.round(Number(value) || 0).toLocaleString("en-US");
 }
