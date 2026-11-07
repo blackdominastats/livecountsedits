@@ -236,7 +236,7 @@
     }
 
     async function check() {
-        // Always collect milestone history for /average, even when Discord alerts are disabled.
+        // Milestone history is independent of Discord notification delivery.
         if (typeof data === 'undefined' || !data || !Array.isArray(data.data)) return;
 
         const channels = data.data;
@@ -257,27 +257,28 @@
                 continue;
             }
 
-            const crossed = milestone !== previous.milestone;
+            if (milestone !== previous.milestone) {
+                const duration = Math.max(0, now - previous.at);
+                const nextState = {
+                    count,
+                    milestone,
+                    at: now,
+                    durationMs: duration,
+                    previousMilestone: previous.milestone
+                };
 
-            if (crossed && cfg.enabled && !inFlight.has(id)) {
-                inFlight.add(id);
-                try {
-                    await send(alertPayload(c, milestone, i + 1, previous));
-                    const duration = now - previous.at;
-                    notified.set(id, {
-                        count,
-                        milestone,
-                        at: now,
-                        durationMs: duration,
-                        previousMilestone: previous.milestone
-                    });
-                    saveState();
-                } catch (err) {
-                    console.error('[Discord Milestones] Failed to send milestone:', err);
-                } finally {
-                    inFlight.delete(id);
+                // Save first so a failed Discord request cannot break /average tracking.
+                notified.set(id, nextState);
+                saveState();
+
+                if (cfg.enabled && !inFlight.has(id)) {
+                    inFlight.add(id);
+                    const payload = alertPayload(c, milestone, i + 1, previous);
+                    send(payload)
+                        .catch(err => console.error('[Discord Milestones] Failed to send milestone:', err))
+                        .finally(() => inFlight.delete(id));
                 }
-            } else if (count !== previous.count && !inFlight.has(id)) {
+            } else if (count !== previous.count) {
                 notified.set(id, { ...previous, count });
                 saveState();
             }
