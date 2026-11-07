@@ -3,7 +3,7 @@
 
     const KEY = 'lcedit_discord_milestones_v2';
     const STATE_KEY = 'lcedit_discord_milestone_state_v1';
-    const defaults = { enabled: false, webhook: '', mention: '' };
+    const defaults = { enabled: false, mention: '' };
     let cfg = { ...defaults };
     const notified = new Map();
     const inFlight = new Set();
@@ -13,12 +13,6 @@
 
     const fmt = n => Math.round(Number(n) || 0).toLocaleString('en-US');
     const fmt2 = n => Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    const validWebhook = url => {
-        try {
-            const u = new URL(url);
-            return u.protocol === 'https:' && (u.hostname === 'discord.com' || u.hostname === 'discordapp.com') && u.pathname.includes('/api/webhooks/');
-        } catch (_) { return false; }
-    };
     const save = () => localStorage.setItem(KEY, JSON.stringify(cfg));
 
     function saveState() {
@@ -158,13 +152,19 @@
     }
 
     async function send(payload) {
-        if (!validWebhook(cfg.webhook)) throw new Error('Discord webhook is not configured.');
-        const r = await fetch(cfg.webhook, {
+        const r = await fetch('http://127.0.0.1:8787/milestone', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
         });
-        if (!r.ok) throw new Error(`Discord returned HTTP ${r.status}`);
+        if (!r.ok) {
+            let message = `Bot bridge returned HTTP ${r.status}`;
+            try {
+                const result = await r.json();
+                if (result.error) message = result.error;
+            } catch (_) {}
+            throw new Error(message);
+        }
     }
 
     function alertPayload(channel, milestone, rank, previousState) {
@@ -236,7 +236,7 @@
     }
 
     async function check() {
-        if (!cfg.enabled || !validWebhook(cfg.webhook)) return;
+        if (!cfg.enabled) return;
         if (typeof data === 'undefined' || !data || !Array.isArray(data.data)) return;
 
         const channels = data.data;
@@ -305,20 +305,18 @@
 
         const panel = document.createElement('div');
         panel.id = 'dm-panel';
-        panel.innerHTML = `<h3>Discord Milestone Notifications</h3><p class="dm-note">Alerts automatically when any channel in the live data crosses a milestone in either direction. The webhook is stored only in this browser, not in GitHub.</p><div class="dm-tiers"><b>Automatic tiers:</b><br>&lt;1K → every 1<br>1K–&lt;10K → every 10<br>10K–&lt;100K → every 100<br>100K–&lt;1M → every 1K<br>1M–&lt;10M → every 10K<br>10M–&lt;100M → every 100K<br>100M–&lt;1B → every 1M</div><label><input id="dm-enabled" type="checkbox" style="width:auto"> Enable notifications</label><label>Discord webhook URL</label><input id="dm-webhook" type="password" placeholder="https://discord.com/api/webhooks/..." autocomplete="off"><label>Optional mention</label><input id="dm-mention" type="text" placeholder="e.g. &lt;@&amp;123456789&gt;"><div class="dm-row"><button id="dm-save">Save</button><button id="dm-test">Send test</button><button id="dm-close">Close</button></div><div id="dm-status"></div>`;
+        panel.innerHTML = `<h3>Discord Milestone Notifications</h3><p class="dm-note">Alerts are sent by your locally running Discord bot. Keep the bot running and set its target channel in discord-bot/.env.</p><div class="dm-tiers"><b>Automatic tiers:</b><br>&lt;1K → every 1<br>1K–&lt;10K → every 10<br>10K–&lt;100K → every 100<br>100K–&lt;1M → every 1K<br>1M–&lt;10M → every 10K<br>10M–&lt;100M → every 100K<br>100M–&lt;1B → every 1M</div><label><input id="dm-enabled" type="checkbox" style="width:auto"> Enable notifications</label><label>Optional mention</label><input id="dm-mention" type="text" placeholder="e.g. &lt;@&amp;123456789&gt;"><div class="dm-row"><button id="dm-save">Save</button><button id="dm-test">Send test</button><button id="dm-close">Close</button></div><div id="dm-status"></div>`;
         document.body.appendChild(panel);
 
         const enabled = panel.querySelector('#dm-enabled');
-        const webhook = panel.querySelector('#dm-webhook');
         const mention = panel.querySelector('#dm-mention');
         const status = panel.querySelector('#dm-status');
-        enabled.checked = cfg.enabled; webhook.value = cfg.webhook; mention.value = cfg.mention;
+        enabled.checked = cfg.enabled; mention.value = cfg.mention;
 
         button.onclick = () => panel.classList.toggle('open');
         panel.querySelector('#dm-close').onclick = () => panel.classList.remove('open');
         panel.querySelector('#dm-save').onclick = () => {
-            if (enabled.checked && !validWebhook(webhook.value.trim())) return void (status.textContent = 'Enter a valid Discord webhook URL.');
-            cfg = { enabled: enabled.checked, webhook: webhook.value.trim(), mention: mention.value.trim() };
+            cfg = { enabled: enabled.checked, mention: mention.value.trim() };
             save();
             notified.clear();
             inFlight.clear();
@@ -326,11 +324,9 @@
             status.textContent = 'Saved. Existing milestones will not fire immediately.';
         };
         panel.querySelector('#dm-test').onclick = async () => {
-            const url = webhook.value.trim();
-            if (!validWebhook(url)) return void (status.textContent = 'Enter a valid Discord webhook URL first.');
-            status.textContent = 'Sending test...';
+            status.textContent = 'Sending test through the bot...';
             const old = cfg;
-            cfg = { ...cfg, enabled: true, webhook: url, mention: mention.value.trim() };
+            cfg = { ...cfg, enabled: true, mention: mention.value.trim() };
             try {
                 const testNow = Date.now();
                 const testPrevious = testNow - (17 * 3600000 + 35 * 60000 + 40000);
