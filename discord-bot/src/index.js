@@ -133,13 +133,41 @@ const server = http.createServer((req, res) => {
         const incomingHistory = Array.isArray(channel.history)
           ? channel.history.slice(-300).map(Number).filter(Number.isFinite)
           : [];
-        // Preserve history across snapshot replacements and add a sample on every sync.
-        // This also makes graphs work when the website's in-memory gainTable is short or resets.
-        const history = [
-          ...(previous && Array.isArray(previous.history) ? previous.history : []),
-          ...incomingHistory,
-          ...(Number.isFinite(count) && count >= 0 ? [count] : [])
-        ].slice(-300);
+        // The website sends its full rolling history on every snapshot.
+        // Merge only the part that is genuinely newer, using the largest
+        // overlap between our saved history tail and the incoming history head.
+        const savedHistory = previous && Array.isArray(previous.history) ? previous.history : [];
+        let overlap = Math.min(savedHistory.length, incomingHistory.length);
+        while (overlap > 0) {
+          let matches = true;
+          for (let i = 0; i < overlap; i++) {
+            if (savedHistory[savedHistory.length - overlap + i] !== incomingHistory[i]) {
+              matches = false;
+              break;
+            }
+          }
+          if (matches) break;
+          overlap--;
+        }
+        const history = [...savedHistory, ...incomingHistory.slice(overlap)];
+        // Add the latest count only when it is a genuinely new value.
+        if (Number.isFinite(count) && count >= 0 && history[history.length - 1] !== count) {
+          history.push(count);
+        }
+        // Collapse exact repeated history cycles left by older versions.
+        for ( (let cycle = Math.floor(history.length / 2); cycle >= 2; cycle--) {
+          if (history.length % cycle !== 0) continue;
+          const first = history.slice(0, cycle);
+          let repeated = true;
+          for (let i = cycle; i < history.length && repeated; i++) {
+            if (history[i] !== first[i % cycle]) repeated = false;
+          }
+          if (repeated) {
+            history.splice(cycle);
+            break;
+          }
+        }
+        while (history.length > 300) history.shift();
         return {
           id,
           name: String(channel.name || "Unknown channel"),
