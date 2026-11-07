@@ -6,6 +6,7 @@ const {
   Client,
   GatewayIntentBits,
   EmbedBuilder,
+  AttachmentBuilder,
   ButtonBuilder,
   ButtonStyle,
   ActionRowBuilder,
@@ -162,11 +163,38 @@ const server = http.createServer((req, res) => {
   });
 });
 
-function graphUrl(history, title) {
+function graphConfig(history, title) {
   const values = Array.isArray(history) ? history.slice(-250).map(Number).filter(Number.isFinite) : [];
   if (values.length < 2) return null;
-  const config = {type:"line",data:{labels:values.map((_,i)=>i+1),datasets:[{label:"Subscribers",data:values,borderColor:"#f0a0a0",backgroundColor:"rgba(240,160,160,.12)",borderWidth:2,pointRadius:0,fill:false,tension:.18}]},options:{title:{display:true,text:title,color:"#fff"},legend:{display:false},scales:{xAxes:[{display:false}],yAxes:[{ticks:{fontColor:"#ddd"},gridLines:{color:"rgba(255,255,255,.12)"}}]},plugins:{datalabels:{display:false}}}};
-  return "https://quickchart.io/chart?width=900&height=420&backgroundColor=%231b1b1b&format=png&c="+encodeURIComponent(JSON.stringify(config));
+  return {
+    type: "line",
+    data: { labels: values.map((_, i) => i + 1), datasets: [{
+      label: "Subscribers", data: values, borderColor: "#f0a0a0",
+      backgroundColor: "rgba(240,160,160,.12)", borderWidth: 2,
+      pointRadius: 0, fill: false, tension: 0.18
+    }] },
+    options: {
+      title: { display: true, text: title, fontColor: "#ffffff" },
+      legend: { display: false },
+      scales: { xAxes: [{ display: false }], yAxes: [{
+        ticks: { fontColor: "#dddddd" },
+        gridLines: { color: "rgba(255,255,255,.12)" }
+      }] }
+    }
+  };
+}
+async function createGraphAttachment(history, title) {
+  const chart = graphConfig(history, title);
+  if (!chart) return null;
+  const response = await fetch("https://quickchart.io/chart", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ width: 900, height: 420, format: "png", backgroundColor: "#1b1b1b", chart })
+  });
+  if (!response.ok) throw new Error("Graph image service returned HTTP " + response.status);
+  const bytes = Buffer.from(await response.arrayBuffer());
+  if (!bytes.length) throw new Error("Graph image service returned an empty image");
+  return new AttachmentBuilder(bytes, { name: "subscriber-graph.png" });
 }
 function graphButton(channelId, shown) {
   return new ActionRowBuilder().addComponents(new ButtonBuilder()
@@ -317,11 +345,22 @@ client.on(Events.InteractionCreate, async interaction => {
     if (!channel) return interaction.reply({ content: "Graph history is not available. Keep the Top 50 page open to sync history.", ephemeral: true });
     const embed = EmbedBuilder.from(interaction.message.embeds[0]);
     if (action === "graphshow") {
-      const url = graphUrl(channel.history, channel.name + " Subscriber History");
-      if (!url) return interaction.reply({ content: "Not enough subscriber history has synced yet.", ephemeral: true });
-      embed.setImage(url);
-    } else embed.setImage(null);
-    return interaction.update({ embeds: [embed], components: [graphButton(channelId, action === "graphshow")] });
+      try {
+        const attachment = await createGraphAttachment(channel.history, channel.name + " Subscriber History");
+        if (!attachment) return interaction.reply({ content: "Not enough subscriber history has synced yet.", ephemeral: true });
+        embed.setImage("attachment://subscriber-graph.png");
+        return interaction.update({
+          embeds: [embed],
+          files: [attachment],
+          components: [graphButton(channelId, true)]
+        });
+      } catch (error) {
+        console.error("Could not generate subscriber graph:", error);
+        return interaction.reply({ content: "I couldn't generate the graph image. Please try again shortly.", ephemeral: true });
+      }
+    }
+    embed.setImage(null);
+    return interaction.update({ embeds: [embed], attachments: [], components: [graphButton(channelId, false)] });
   }
   if (!interaction.isChatInputCommand()) return;
   if (interaction.commandName !== "average" && interaction.commandName !== "predict") return;
