@@ -51,7 +51,8 @@
             name: channel.name || 'Unknown channel',
             count: Number(channel.count),
             url: channel.url || channel.link || channel.channelUrl || '',
-            image: channel.image || ''
+            image: channel.image || '',
+            history: (typeof gainTable !== "undefined" && gainTable[channel.id]) ? gainTable[channel.id].slice(-300).map(value => Number(getDisplayedCount(value) || value)).filter(Number.isFinite) : []
         }));
         try {
             await fetch('http://127.0.0.1:8787/snapshot', {
@@ -195,6 +196,7 @@
             : `**${name}** ${action} **${fmt(actionAmount)} subscribers**`;
 
         return {
+            channelId: String(channel.id || ''),
             username: 'Livecountsedit',
             content: cfg.mention || undefined,
             embeds: [{
