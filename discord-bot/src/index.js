@@ -349,18 +349,22 @@ client.on(Events.InteractionCreate, async interaction => {
         const attachment = await createGraphAttachment(channel.history, channel.name + " Subscriber History");
         if (!attachment) return interaction.reply({ content: "Not enough subscriber history has synced yet.", ephemeral: true });
         embed.setImage("attachment://subscriber-graph.png");
-        return interaction.update({
+        await interaction.deferUpdate();
+        await interaction.message.edit({
           embeds: [embed],
           files: [attachment],
           components: [graphButton(channelId, true)]
         });
+        return;
       } catch (error) {
         console.error("Could not generate subscriber graph:", error);
         return interaction.reply({ content: "I couldn't generate the graph image. Please try again shortly.", ephemeral: true });
       }
     }
     embed.setImage(null);
-    return interaction.update({ embeds: [embed], attachments: [], components: [graphButton(channelId, false)] });
+    await interaction.deferUpdate();
+    await interaction.message.edit({ embeds: [embed], attachments: [], components: [graphButton(channelId, false)] });
+    return;
   }
   if (!interaction.isChatInputCommand()) return;
   if (interaction.commandName !== "average" && interaction.commandName !== "predict") return;
