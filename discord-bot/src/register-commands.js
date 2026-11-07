@@ -19,6 +19,26 @@ const commands = [
         .setDescription("Channel name or channel ID, e.g. MrBeast")
         .setRequired(true)
         .setMaxLength(100)
+    ),
+  new SlashCommandBuilder()
+    .setName("predict")
+    .setDescription("Predict when a channel will reach a subscriber count")
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName("count")
+        .setDescription("Predict when a channel reaches a target subscriber count")
+        .addStringOption(option =>
+          option.setName("channelname")
+            .setDescription("YouTube channel name or channel ID")
+            .setRequired(true)
+            .setMaxLength(100)
+        )
+        .addStringOption(option =>
+          option.setName("amount")
+            .setDescription("Target subscriber count, e.g. 109M or 109000000")
+            .setRequired(true)
+            .setMaxLength(30)
+        )
     )
 ].map(command => command.toJSON());
 
