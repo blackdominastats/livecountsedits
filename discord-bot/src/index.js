@@ -143,6 +143,57 @@ function durationText(ms) {
   return parts.join(" ");
 }
 
+
+function parseSubscriberCount(input) {
+  const cleaned = String(input || "").trim().replace(/,/g, "").replace(/\s+/g, "");
+  const match = cleaned.match(/^(\d+(?:\.\d+)?)([kmb])?$/i);
+  if (!match) return NaN;
+  const multipliers = { k: 1e3, m: 1e6, b: 1e9 };
+  const value = Number(match[1]) * (multipliers[(match[2] || "").toLowerCase()] || 1);
+  return Number.isSafeInteger(Math.round(value)) ? Math.round(value) : NaN;
+}
+
+function buildPredictionEmbed(channel, milestoneState, targetCount) {
+  const currentCount = Number(channel.count);
+  const reached = Number(milestoneState.milestone);
+  const previous = Number(milestoneState.previousMilestone || 0);
+  const durationMs = Number(milestoneState.durationMs || 0);
+  const change = reached - previous;
+  const averagePerDay = durationMs > 0 ? change / (durationMs / 86400000) : NaN;
+  const difference = targetCount - currentCount;
+  let etaMs = NaN;
+
+  if (difference === 0) etaMs = 0;
+  else if (Number.isFinite(averagePerDay) && averagePerDay !== 0 && Math.sign(difference) === Math.sign(averagePerDay)) {
+    etaMs = (difference / averagePerDay) * 86400000;
+  }
+
+  const validEta = Number.isFinite(etaMs) && etaMs >= 0;
+  const projectedDate = validEta ? new Date(Date.now() + etaMs) : null;
+  const averageText = Number.isFinite(averagePerDay)
+    ? (averagePerDay > 0 ? "+" : "") + fmt(averagePerDay)
+    : "Unavailable";
+  const projectionText = projectedDate
+    ? "<t:" + Math.floor(projectedDate.getTime() / 1000) + ":F> (<t:" + Math.floor(projectedDate.getTime() / 1000) + ":R>)"
+    : "Cannot estimate with the current average growth direction.";
+
+  const embed = new EmbedBuilder()
+    .setColor(0x20B89A)
+    .setTitle("▶️ YouTube Subscriber Count Prediction")
+    .setDescription(
+      "**" + channel.name + " Subscriber Count Prediction**\n\n" +
+      "📊 **" + channel.name + "** currently has **" + fmt(currentCount) + " estimated** subscribers, and is averaging **" +
+      averageText + " subscribers per day**.\n" +
+      "🔮 **" + channel.name + "** is estimated to reach **" + fmt(targetCount) +
+      "** subscribers on " + projectionText + "."
+    )
+    .setFooter({ text: "LiveCountsEdits • Prediction based on the latest recorded milestone average" });
+
+  if (channel.url) embed.setURL(channel.url);
+  if (channel.image) embed.setThumbnail(channel.image);
+  return embed;
+}
+
 function buildAverageEmbed(channel, milestoneState) {
   const currentCount = Number(channel.count);
   const reached = Number(milestoneState.milestone);
@@ -196,10 +247,16 @@ client.once(Events.ClientReady, readyClient => {
 });
 
 client.on(Events.InteractionCreate, async interaction => {
-  if (!interaction.isChatInputCommand() || interaction.commandName !== "average") return;
+  if (!interaction.isChatInputCommand()) return;
+  if (interaction.commandName !== "average" && interaction.commandName !== "predict") return;
   await interaction.deferReply();
 
-  const query = interaction.options.getString("channel", true).trim().toLowerCase();
+  const isPrediction = interaction.commandName === "predict";
+  const query = (isPrediction
+    ? interaction.options.getString("channelname", true)
+    : interaction.options.getString("channel", true)
+  ).trim().toLowerCase();
+
   const channel = snapshot.channels.find(item =>
     item.name.toLowerCase() === query || item.id.toLowerCase() === query
   ) || snapshot.channels.find(item => item.name.toLowerCase().includes(query));
@@ -211,6 +268,18 @@ client.on(Events.InteractionCreate, async interaction => {
   const state = snapshot.milestones[channel.id] || snapshot.milestones["name:" + channel.name];
   if (!state || !Number.isFinite(Number(state.milestone))) {
     return interaction.editReply("I don't have a recorded milestone for **" + channel.name + "** yet. Keep the Top 50 page open so milestone tracking can collect data.");
+  }
+
+  if (isPrediction) {
+    const rawAmount = interaction.options.getString("amount", true);
+    const targetCount = parseSubscriberCount(rawAmount);
+    if (!Number.isSafeInteger(targetCount) || targetCount < 0) {
+      return interaction.editReply("Please enter a valid subscriber amount, such as **109000000**, **109,000,000**, **109M**, or **850K**.");
+    }
+    const predictionEmbed = buildPredictionEmbed(channel, state, targetCount);
+    const age = snapshot.receivedAt ? Date.now() - snapshot.receivedAt : Infinity;
+    const staleNote = age > 120000 ? "⚠️ Data was last synced " + durationText(age) + " ago. Open LiveCountsEdits to refresh it." : "";
+    return interaction.editReply({ embeds: [predictionEmbed], content: staleNote || undefined });
   }
 
   const embed = buildAverageEmbed(channel, state);
