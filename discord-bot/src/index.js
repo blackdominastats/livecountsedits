@@ -6,6 +6,9 @@ const {
   Client,
   GatewayIntentBits,
   EmbedBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+  ActionRowBuilder,
   Events
 } = require("discord.js");
 
@@ -82,6 +85,10 @@ const server = http.createServer((req, res) => {
           content: typeof incoming.content === "string" ? incoming.content : undefined,
           embeds: incoming.embeds.slice(0, 10).map(embed => EmbedBuilder.from(embed))
         };
+        const graphChannel = snapshot.channels.find(c => c.id && c.id === String(incoming.channelId || ""));
+        if (graphChannel && graphChannel.history.length > 1) {
+          message.components = [graphButton(graphChannel.id, false)];
+        }
         await target.send(message);
         return sendJson(res, 200, { ok: true });
       } catch (error) {
@@ -101,7 +108,8 @@ const server = http.createServer((req, res) => {
           name: String(channel.name || "Unknown channel"),
           count: Number(channel.count),
           url: String(channel.url || channel.link || ""),
-          image: String(channel.image || "")
+          image: String(channel.image || ""),
+          history: Array.isArray(channel.history) ? channel.history.slice(-300).map(Number).filter(Number.isFinite) : []
         })).filter(channel => Number.isFinite(channel.count) && channel.count >= 0),
         milestones: incoming.milestones
       };
@@ -113,6 +121,21 @@ const server = http.createServer((req, res) => {
     }
   });
 });
+
+function graphUrl(history, title) {
+  const values = Array.isArray(history) ? history.slice(-250).map(Number).filter(Number.isFinite) : [];
+  if (values.length < 2) return null;
+  const config = {type:"line",data:{labels:values.map((_,i)=>i+1),datasets:[{label:"Subscribers",data:values,borderColor:"#f0a0a0",backgroundColor:"rgba(240,160,160,.12)",borderWidth:2,pointRadius:0,fill:false,tension:.18}]},options:{title:{display:true,text:title,color:"#fff"},legend:{display:false},scales:{xAxes:[{display:false}],yAxes:[{ticks:{fontColor:"#ddd"},gridLines:{color:"rgba(255,255,255,.12)"}}]},plugins:{datalabels:{display:false}}}};
+  return "https://quickchart.io/chart?width=900&height=420&backgroundColor=%231b1b1b&format=png&c="+encodeURIComponent(JSON.stringify(config));
+}
+function graphButton(channelId, shown) {
+  return new ActionRowBuilder().addComponents(new ButtonBuilder()
+    .setCustomId((shown ? "graphhide:" : "graphshow:") + channelId)
+    .setLabel(shown ? "Hide Subscriber Graph" : "View Subscriber Graph")
+    .setEmoji(shown ? "📉" : "📈")
+    .setStyle(ButtonStyle.Primary));
+}
+
 function fmt(value) {
   return Math.round(Number(value) || 0).toLocaleString("en-US");
 }
@@ -247,6 +270,19 @@ client.once(Events.ClientReady, readyClient => {
 });
 
 client.on(Events.InteractionCreate, async interaction => {
+  if (interaction.isButton()) {
+    const [action, channelId] = interaction.customId.split(":");
+    if (!["graphshow", "graphhide"].includes(action)) return;
+    const channel = snapshot.channels.find(c => c.id === channelId);
+    if (!channel) return interaction.reply({ content: "Graph history is not available. Keep the Top 50 page open to sync history.", ephemeral: true });
+    const embed = EmbedBuilder.from(interaction.message.embeds[0]);
+    if (action === "graphshow") {
+      const url = graphUrl(channel.history, channel.name + " Subscriber History");
+      if (!url) return interaction.reply({ content: "Not enough subscriber history has synced yet.", ephemeral: true });
+      embed.setImage(url);
+    } else embed.setImage(null);
+    return interaction.update({ embeds: [embed], components: [graphButton(channelId, action === "graphshow")] });
+  }
   if (!interaction.isChatInputCommand()) return;
   if (interaction.commandName !== "average" && interaction.commandName !== "predict") return;
   await interaction.deferReply();
@@ -279,13 +315,13 @@ client.on(Events.InteractionCreate, async interaction => {
     const predictionEmbed = buildPredictionEmbed(channel, state, targetCount);
     const age = snapshot.receivedAt ? Date.now() - snapshot.receivedAt : Infinity;
     const staleNote = age > 120000 ? "⚠️ Data was last synced " + durationText(age) + " ago. Open LiveCountsEdits to refresh it." : "";
-    return interaction.editReply({ embeds: [predictionEmbed], content: staleNote || undefined });
+    return interaction.editReply({ embeds: [predictionEmbed], components: [graphButton(channel.id, false)], content: staleNote || undefined });
   }
 
   const embed = buildAverageEmbed(channel, state);
   const age = snapshot.receivedAt ? Date.now() - snapshot.receivedAt : Infinity;
   const staleNote = age > 120000 ? "\n⚠️ Data was last synced " + durationText(age) + " ago. Open LiveCountsEdits to refresh it." : "";
-  return interaction.editReply({ embeds: [embed], content: staleNote || undefined });
+  return interaction.editReply({ embeds: [embed], components: [graphButton(channel.id, false)], content: staleNote || undefined });
 });
 
 server.listen(PORT, HOST, () => {});
