@@ -345,11 +345,15 @@ client.on(Events.InteractionCreate, async interaction => {
     if (!channel) return interaction.reply({ content: "Graph history is not available. Keep the Top 50 page open to sync history.", ephemeral: true });
     const embed = EmbedBuilder.from(interaction.message.embeds[0]);
     if (action === "graphshow") {
+      // Acknowledge immediately: graph rendering may take longer than Discord's 3-second limit.
+      await interaction.deferUpdate();
       try {
         const attachment = await createGraphAttachment(channel.history, channel.name + " Subscriber History");
-        if (!attachment) return interaction.reply({ content: "Not enough subscriber history has synced yet.", ephemeral: true });
+        if (!attachment) {
+          await interaction.followUp({ content: "Not enough subscriber history has synced yet.", ephemeral: true });
+          return;
+        }
         embed.setImage("attachment://subscriber-graph.png");
-        await interaction.deferUpdate();
         await interaction.message.edit({
           embeds: [embed],
           files: [attachment],
@@ -358,7 +362,8 @@ client.on(Events.InteractionCreate, async interaction => {
         return;
       } catch (error) {
         console.error("Could not generate subscriber graph:", error);
-        return interaction.reply({ content: "I couldn't generate the graph image. Please try again shortly.", ephemeral: true });
+        await interaction.followUp({ content: "I couldn't generate the graph image. Please try again shortly.", ephemeral: true }).catch(console.error);
+        return;
       }
     }
     embed.setImage(null);
