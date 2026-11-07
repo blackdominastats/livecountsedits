@@ -1,0 +1,18 @@
+{
+  "name": "livecountsedits-discord-bot",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Local Discord slash-command bot for LiveCountsEdits milestone statistics",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "register": "node src/register-commands.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "discord.js": "^14.19.3",
+    "dotenv": "^16.4.7"
+  }
+}
