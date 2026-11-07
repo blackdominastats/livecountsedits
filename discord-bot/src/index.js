@@ -155,7 +155,7 @@ const server = http.createServer((req, res) => {
           history.push(count);
         }
         // Collapse exact repeated history cycles left by older versions.
-        for ( (let cycle = Math.floor(history.length / 2); cycle >= 2; cycle--) {
+        for (let cycle = Math.floor(history.length / 2); cycle >= 2; cycle--) {
           if (history.length % cycle !== 0) continue;
           const first = history.slice(0, cycle);
           let repeated = true;
