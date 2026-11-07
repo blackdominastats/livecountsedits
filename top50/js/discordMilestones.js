@@ -44,6 +44,32 @@
         });
     } catch (_) {}
 
+    let lastBridgeSync = 0;
+    async function syncLocalBot() {
+        const now = Date.now();
+        if (now - lastBridgeSync < 5000) return;
+        if (typeof data === 'undefined' || !data || !Array.isArray(data.data)) return;
+        lastBridgeSync = now;
+        const milestones = {};
+        notified.forEach((value, key) => { milestones[key] = value; });
+        const channels = data.data.map(channel => ({
+            id: channel.id || '',
+            name: channel.name || 'Unknown channel',
+            count: Number(channel.count),
+            url: channel.url || channel.link || channel.channelUrl || '',
+            image: channel.image || ''
+        }));
+        try {
+            await fetch('http://127.0.0.1:8787/snapshot', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ channels, milestones })
+            });
+        } catch (_) {
+            // The local bot may be offline; website notifications continue normally.
+        }
+    }
+
     function milestoneStep(count) {
         if (count < 1_000) return 1;
         if (count < 10_000) return 10;
@@ -341,7 +367,7 @@
     }
 
     const timer = setInterval(() => {
-        try { ui(); check(); } catch (err) { console.error('[Discord Milestones]', err); }
+        try { ui(); check(); syncLocalBot(); } catch (err) { console.error('[Discord Milestones]', err); }
     }, 1000);
     window.addEventListener('beforeunload', () => {
         try { saveState(); } catch (_) {}
