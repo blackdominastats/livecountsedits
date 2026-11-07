@@ -17,7 +17,6 @@ if (!token) {
 
 const HOST = process.env.BRIDGE_HOST || "127.0.0.1";
 const PORT = Number(process.env.BRIDGE_PORT || 8787);
-const DISCORD_CHANNEL_ID = process.env.DISCORD_CHANNEL_ID;
 const DATA_FILE = path.join(__dirname, "..", "data.json");
 const ALLOWED_ORIGINS = new Set([
   "https://lcedit.com",
@@ -53,35 +52,16 @@ const server = http.createServer((req, res) => {
     res.setHeader("Access-Control-Allow-Headers", "Content-Type");
   }
   if (req.method === "OPTIONS") { res.writeHead(204); return res.end(); }
-  if (req.method !== "POST" || !["/snapshot", "/milestone"].includes(req.url)) return sendJson(res, 404, { error: "Not found" });
+  if (req.method !== "POST" || req.url !== "/snapshot") return sendJson(res, 404, { error: "Not found" });
 
   let body = "";
   req.on("data", chunk => {
     body += chunk;
     if (body.length > 2_000_000) req.destroy();
   });
-  req.on("end", async () => {
+  req.on("end", () => {
     try {
       const incoming = JSON.parse(body || "{}");
-
-      if (req.url === "/milestone") {
-        if (!Array.isArray(incoming.embeds) || !incoming.embeds[0]) {
-          return sendJson(res, 400, { error: "Missing milestone embed" });
-        }
-        if (!DISCORD_CHANNEL_ID) {
-          return sendJson(res, 500, { error: "Set DISCORD_CHANNEL_ID in discord-bot/.env" });
-        }
-        const target = await client.channels.fetch(DISCORD_CHANNEL_ID);
-        if (!target || !target.isTextBased() || typeof target.send !== "function") {
-          return sendJson(res, 404, { error: "The configured Discord channel is unavailable or cannot receive messages" });
-        }
-        await target.send({
-          content: incoming.content || undefined,
-          embeds: [EmbedBuilder.from(incoming.embeds[0])]
-        });
-        return sendJson(res, 200, { ok: true });
-      }
-
       if (!Array.isArray(incoming.channels) || typeof incoming.milestones !== "object" || !incoming.milestones) {
         return sendJson(res, 400, { error: "Invalid snapshot format" });
       }
@@ -98,9 +78,8 @@ const server = http.createServer((req, res) => {
       };
       saveSnapshot();
       return sendJson(res, 200, { ok: true, channels: snapshot.channels.length, receivedAt: snapshot.receivedAt });
-    } catch (error) {
-      console.error("Website bridge request failed:", error);
-      return sendJson(res, 400, { error: error.message || "Invalid request" });
+    } catch {
+      return sendJson(res, 400, { error: "Invalid JSON" });
     }
   });
 });
