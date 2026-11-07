@@ -124,16 +124,33 @@ const server = http.createServer((req, res) => {
       if (!Array.isArray(incoming.channels) || typeof incoming.milestones !== "object" || !incoming.milestones) {
         return sendJson(res, 400, { error: "Invalid snapshot format" });
       }
-      snapshot = {
-        receivedAt: Date.now(),
-        channels: incoming.channels.slice(0, 1000).map(channel => ({
-          id: String(channel.id || ""),
+      const previousChannels = new Map(snapshot.channels.map(channel => [channel.id, channel]));
+      const nextChannels = incoming.channels.slice(0, 1000).map(channel => {
+        const id = String(channel.id || "");
+        const count = Number(channel.count);
+        const previous = previousChannels.get(id);
+        const incomingHistory = Array.isArray(channel.history)
+          ? channel.history.slice(-300).map(Number).filter(Number.isFinite)
+          : [];
+        // Preserve history across snapshot replacements and add a sample on every sync.
+        // This also makes graphs work when the website's in-memory gainTable is short or resets.
+        const history = [
+          ...(previous && Array.isArray(previous.history) ? previous.history : []),
+          ...incomingHistory,
+          ...(Number.isFinite(count) && count >= 0 ? [count] : [])
+        ].slice(-300);
+        return {
+          id,
           name: String(channel.name || "Unknown channel"),
-          count: Number(channel.count),
+          count,
           url: String(channel.url || channel.link || ""),
           image: String(channel.image || ""),
-          history: Array.isArray(channel.history) ? channel.history.slice(-300).map(Number).filter(Number.isFinite) : []
-        })).filter(channel => Number.isFinite(channel.count) && channel.count >= 0),
+          history
+        };
+      }).filter(channel => Number.isFinite(channel.count) && channel.count >= 0);
+      snapshot = {
+        receivedAt: Date.now(),
+        channels: nextChannels,
         milestones: incoming.milestones
       };
       saveSnapshot();
