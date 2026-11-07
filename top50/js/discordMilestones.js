@@ -195,8 +195,17 @@
             ? `[${name}](${channelUrl}) ${action} **${fmt(actionAmount)} subscribers**`
             : `**${name}** ${action} **${fmt(actionAmount)} subscribers**`;
 
+        const channelHistory = (typeof gainTable !== 'undefined' && channel.id && gainTable[channel.id])
+            ? gainTable[channel.id].slice(-300).map(value => Number(getDisplayedCount(value) || value)).filter(Number.isFinite)
+            : [];
+
         return {
             channelId: String(channel.id || ''),
+            channelName: name,
+            count: Number(channel.count) || 0,
+            channelUrl,
+            channelImage: channel.image || '',
+            history: channelHistory,
             username: 'Livecountsedit',
             content: cfg.mention || undefined,
             embeds: [{
