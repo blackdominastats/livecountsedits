@@ -85,9 +85,32 @@ const server = http.createServer((req, res) => {
           content: typeof incoming.content === "string" ? incoming.content : undefined,
           embeds: incoming.embeds.slice(0, 10).map(embed => EmbedBuilder.from(embed))
         };
-        const graphChannel = snapshot.channels.find(c => c.id && c.id === String(incoming.channelId || ""));
-        if (graphChannel && graphChannel.history.length > 1) {
-          message.components = [graphButton(graphChannel.id, false)];
+        const graphId = String(incoming.channelId || "");
+        if (graphId) {
+          let graphChannel = snapshot.channels.find(c => c.id === graphId);
+          const suppliedHistory = Array.isArray(incoming.history)
+            ? incoming.history.slice(-300).map(Number).filter(Number.isFinite)
+            : [];
+          if (!graphChannel) {
+            graphChannel = {
+              id: graphId,
+              name: String(incoming.channelName || "Unknown channel"),
+              count: Number(incoming.count) || 0,
+              url: String(incoming.channelUrl || ""),
+              image: String(incoming.channelImage || ""),
+              history: suppliedHistory
+            };
+            snapshot.channels.push(graphChannel);
+          } else {
+            if (suppliedHistory.length > 1) graphChannel.history = suppliedHistory;
+            graphChannel.name = String(incoming.channelName || graphChannel.name);
+            graphChannel.count = Number(incoming.count) || graphChannel.count;
+            graphChannel.url = String(incoming.channelUrl || graphChannel.url);
+            graphChannel.image = String(incoming.channelImage || graphChannel.image);
+          }
+          saveSnapshot();
+          // Always show the graph button on real milestone notifications.
+          message.components = [graphButton(graphId, false)];
         }
         await target.send(message);
         return sendJson(res, 200, { ok: true });
