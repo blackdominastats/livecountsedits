@@ -236,7 +236,7 @@
     }
 
     async function check() {
-        if (!cfg.enabled) return;
+        // Always collect milestone history for /average, even when Discord alerts are disabled.
         if (typeof data === 'undefined' || !data || !Array.isArray(data.data)) return;
 
         const channels = data.data;
@@ -259,7 +259,7 @@
 
             const crossed = milestone !== previous.milestone;
 
-            if (crossed && !inFlight.has(id)) {
+            if (crossed && cfg.enabled && !inFlight.has(id)) {
                 inFlight.add(id);
                 try {
                     await send(alertPayload(c, milestone, i + 1, previous));
@@ -318,10 +318,8 @@
         panel.querySelector('#dm-save').onclick = () => {
             cfg = { enabled: enabled.checked, mention: mention.value.trim() };
             save();
-            notified.clear();
-            inFlight.clear();
-            try { localStorage.removeItem(STATE_KEY); } catch (_) {}
-            status.textContent = 'Saved. Existing milestones will not fire immediately.';
+            // Saving notification preferences must not erase the history used by /average.
+            status.textContent = 'Saved. Milestone tracking history was preserved.';
         };
         panel.querySelector('#dm-test').onclick = async () => {
             status.textContent = 'Sending test through the bot...';
